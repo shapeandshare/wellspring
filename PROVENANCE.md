@@ -123,13 +123,19 @@ git-ignored; the manifests are not).
 Being direct about the limits of "reproducible" here, rather than
 overclaiming:
 
-- **GPU/Metal floating-point execution order** is not something any of
+- **GPU/Metal/CUDA floating-point execution order** is not something any of
   `SEED`, `MODEL_COMMIT`, or pinned dependencies control. Heretic's `--seed`
   covers Python's `random`, NumPy, PyTorch, and Optuna's search order — the
   dominant source of run-to-run variance — but bit-exact numerical
   reproducibility across different hardware/driver versions isn't
   guaranteed by this pipeline or, to our knowledge, by PyTorch/MLX/GGML
-  themselves on Apple Silicon.
+  themselves, whether on Apple Silicon (Metal) or on NVIDIA GPUs (CUDA).
+  Running heretic across multiple *non-identical* GPUs (heretic's own
+  `device_map="auto"` sharding on a heterogeneous multi-GPU box) introduces
+  an additional, heretic-documented source of non-determinism — heretic
+  itself prints a warning about this in generated model cards when it
+  detects heterogeneous GPUs were used (see p-e-w/heretic
+  `src/heretic/utils.py`).
 - **`kernels-data` and `sigstore-models`** (two transitive Python
   dependencies) report an unresolvable license via automated scanning —
   flagged in `THIRD_PARTY_NOTICES.md`, not silently ignored, but not
