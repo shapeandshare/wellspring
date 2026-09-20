@@ -183,7 +183,7 @@ MAX_TOKENS ?= 100
 # Empty by default (script's own defaults apply).
 PREFLIGHT_ARGS ?=
 
-.PHONY: help setup venv install abliterate convert-mlx calibration-data build-llama-cpp calibration-text convert-gguf quantize-gguf gguf generate-mlx lock notices clean doctor
+.PHONY: help setup venv install test abliterate convert-mlx calibration-data build-llama-cpp calibration-text convert-gguf quantize-gguf gguf generate-mlx lock notices clean doctor
 
 help:
 	@echo "Wellspring: Heretic + MLX/GGUF workflow"
@@ -191,6 +191,8 @@ help:
 	@echo "  make setup                          Create ./.venv and install requirements.txt"
 	@echo "  make venv                          Create ./.venv (python3.14)"
 	@echo "  make install                       Install requirements.txt into ./.venv"
+	@echo "  make test                           Run the pytest suite (tests/) -- see the"
+	@echo "                                       constitution's Article IX (TDD, NON-NEGOTIABLE)"
 	@echo "  make abliterate [MODEL=org/name]    Run heretic against MODEL (default: $(MODEL))"
 	@echo "                                       heretic will interactively ask what to do with"
 	@echo "                                       the result -- choose save, then enter a path"
@@ -235,6 +237,9 @@ install: venv
 	$(PYTHON) -m pip install -U -r requirements.txt
 
 setup: install
+
+test: install
+	$(PYTHON) -m pytest tests/ -v
 
 abliterate: install
 	@echo "==> Abliterating $(MODEL)"
