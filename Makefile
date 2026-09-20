@@ -17,6 +17,32 @@ CONVERT_HF_TO_GGUF := $(LLAMA_CPP_DIR)/convert_hf_to_gguf.py
 LLAMA_IMATRIX    := $(LLAMA_CPP_DIR)/build/bin/llama-imatrix
 LLAMA_QUANTIZE   := $(LLAMA_CPP_DIR)/build/bin/llama-quantize
 
+UNAME_S := $(shell uname -s)
+# Auto-detect an NVIDIA GPU via the driver's own CLI tool. On macOS this is
+# always absent, so GGML_CUDA naturally resolves to OFF there without any
+# platform-specific branching -- override explicitly with GGML_CUDA=ON/OFF
+# if you need to force one way or the other (e.g. a Linux CPU-only box, or
+# a Linux box where nvidia-smi isn't on PATH but CUDA is still usable).
+HAS_NVIDIA_GPU := $(shell command -v nvidia-smi >/dev/null 2>&1 && echo 1)
+GGML_CUDA        ?= $(if $(HAS_NVIDIA_GPU),ON,OFF)
+# Optional: force a specific CUDA compute-capability list, e.g. "80;86;90"
+# (see https://developer.nvidia.com/cuda-gpus). Left empty by default so
+# ik_llama.cpp's own CMakeLists picks its default target list -- but that
+# default is toolchain-dependent (see ggml/src/CMakeLists.txt at
+# LLAMA_CPP_REF): with -DGGML_NATIVE=ON (passed below, unconditionally) on
+# CMake >=3.24 + CUDA toolkit >=11.6, it resolves to "native" (auto-detects
+# your actual GPU, correctly covering L4/L40s/RTX-40-series [89] and
+# H100/H200 [90]); on an OLDER CMake/CUDA it silently falls back to the
+# hardcoded list "50;61;70;75;80", which does NOT include 89/90. On a Linux
+# instance with an L4/L40s/H100/H200 and an older toolchain, set this
+# explicitly (CUDA_ARCHITECTURES=89 or =90) -- see README.md's Track B
+# section for the full explanation.
+CUDA_ARCHITECTURES ?=
+# Layers to offload to the GPU for the imatrix pass when GGML_CUDA=ON
+# (999 = "all layers"; llama.cpp/ik_llama.cpp clamps to the model's actual
+# layer count). Ignored entirely when GGML_CUDA is OFF.
+LLAMA_NGL ?= 999
+
 # --- Abliteration (make abliterate MODEL=org/name) -------------------------
 MODEL       ?= Qwen/Qwen3.6-35B-A3B
 QUANTIZATION ?= NONE
@@ -46,6 +72,28 @@ GOOD_EVAL_PROMPTS_DATASET ?= mlabonne/harmless_alpaca
 GOOD_EVAL_PROMPTS_COMMIT  ?= 02c6a92cfcf11bb0c387334f8146d149d65b587f
 BAD_EVAL_PROMPTS_DATASET  ?= mlabonne/harmful_behaviors
 BAD_EVAL_PROMPTS_COMMIT   ?= 01cead01398926d81f7c52bdb790ee8cf77ebba7
+# Advanced/optional: override heretic's own Accelerate device placement.
+# Left EMPTY by default so heretic's own default (device_map="auto", which
+# already auto-shards a model across every visible GPU via Hugging Face
+# Accelerate -- see p-e-w/heretic src/heretic/config.py) is used unchanged.
+# Only set these if you need to deviate from that default, e.g. to pin
+# everything to one device or cap per-GPU memory on a heterogeneous
+# multi-GPU box. Flag names are CONFIRMED correct: heretic's own
+# src/heretic/config.py passes cli_kebab_case=True to CliSettingsSource(...)
+# in settings_customise_sources -- the same mechanism that produces the
+# already-used --quantization/--model-commit/--export-strategy flags --
+# so device_map -> --device-map and max_memory -> --max-memory.
+# DEVICE_MAP's field type is `str | Dict[str, int | str]`, so a plain
+# string ("auto", "balanced", "sequential", "cuda:0", ...) is valid as-is.
+# MAX_MEMORY's field type is `Dict[str, str] | None` -- pydantic-settings'
+# CLI dict parsing (EnvSettingsSource.prepare_field_value, which
+# CliSettingsSource inherits -- see pydantic-settings PR #214) accepts
+# comma-separated key=value pairs in one flag, no JSON-escaping needed:
+#   MAX_MEMORY="0=20GiB,1=20GiB,cpu=64GiB"
+# (device index or "cpu" as key, a size string as value -- matching
+# Accelerate's own max_memory dict convention).
+DEVICE_MAP  ?=
+MAX_MEMORY  ?=
 
 # --- MLX conversion (make convert-mlx HF_PATH=...) --------------------------
 HF_PATH      ?= $(OUT_DIR)
@@ -129,7 +177,13 @@ CALIB_TEXT_REVISION ?= dce01c9b08f87459cf36a430d809084718273017
 PROMPT     ?= Hello, how are you?
 MAX_TOKENS ?= 100
 
-.PHONY: help setup venv install abliterate convert-mlx calibration-data build-llama-cpp calibration-text convert-gguf quantize-gguf gguf generate-mlx lock notices clean
+# --- Preflight / environment health check (make doctor) --------------------
+# Extra args forwarded verbatim to scripts/preflight_check.py, e.g.
+#   make doctor PREFLIGHT_ARGS="--require-gpu --min-vram-gb 600"
+# Empty by default (script's own defaults apply).
+PREFLIGHT_ARGS ?=
+
+.PHONY: help setup venv install abliterate convert-mlx calibration-data build-llama-cpp calibration-text convert-gguf quantize-gguf gguf generate-mlx lock notices clean doctor
 
 help:
 	@echo "Wellspring: Heretic + MLX/GGUF workflow"
@@ -168,6 +222,8 @@ help:
 	@echo "  make lock                           Freeze exact installed versions -> requirements-lock.txt"
 	@echo "  make notices                        Regenerate third_party_licenses.json (pip-licenses)"
 	@echo "  make clean                          Remove ./.venv"
+	@echo "  make doctor [PREFLIGHT_ARGS=...]    Check CPU/RAM/disk/GPU-VRAM before setup/abliterate"
+	@echo "                                       (stdlib-only, runs before ./.venv exists)"
 
 $(VENV)/bin/python:
 	python3.14 -m venv $(VENV)
@@ -190,7 +246,9 @@ abliterate: install
 		--good-prompts.dataset $(GOOD_PROMPTS_DATASET) --good-prompts.commit $(GOOD_PROMPTS_COMMIT) \
 		--bad-prompts.dataset $(BAD_PROMPTS_DATASET) --bad-prompts.commit $(BAD_PROMPTS_COMMIT) \
 		--good-evaluation-prompts.dataset $(GOOD_EVAL_PROMPTS_DATASET) --good-evaluation-prompts.commit $(GOOD_EVAL_PROMPTS_COMMIT) \
-		--bad-evaluation-prompts.dataset $(BAD_EVAL_PROMPTS_DATASET) --bad-evaluation-prompts.commit $(BAD_EVAL_PROMPTS_COMMIT)
+		--bad-evaluation-prompts.dataset $(BAD_EVAL_PROMPTS_DATASET) --bad-evaluation-prompts.commit $(BAD_EVAL_PROMPTS_COMMIT) \
+		$(if $(DEVICE_MAP),--device-map "$(DEVICE_MAP)") \
+		$(if $(MAX_MEMORY),--max-memory "$(MAX_MEMORY)")
 	@"$(PYTHON)" scripts/write_manifest.py --step abliterate --freeze \
 		--out "$(OUT_DIR).provenance.json" \
 		--field model=$(MODEL) --field model_commit=$(MODEL_COMMIT) \
@@ -204,6 +262,11 @@ abliterate: install
 	@echo "    chose a different save path when heretic prompted you, move this file there."
 
 convert-mlx: install
+	@if [ "$(UNAME_S)" != "Darwin" ]; then \
+		echo "ERROR: MLX export requires macOS on Apple Silicon (mlx-vlm has no CUDA/Linux backend)." >&2; \
+		echo "        Use the GGUF export path instead: make convert-gguf && make quantize-gguf" >&2; \
+		exit 1; \
+	fi
 	@test -n "$(MLX_OUT_DIR)" && [ "$(MLX_OUT_DIR)" != "/" ] && [ "$(MLX_OUT_DIR)" != "." ] || \
 		{ echo "ERROR: MLX_OUT_DIR is unsafe: '$(MLX_OUT_DIR)'" >&2; exit 1; }
 	@echo "==> Converting $(HF_PATH) -> $(MLX_OUT_DIR) ($(Q_BITS)-bit, group size $(Q_GROUP_SIZE), $(QUANT_METHOD) quantization, calibration=$(CALIBRATION))"
@@ -231,6 +294,11 @@ calibration-data: install
 		--out "$(CALIBRATION_DATA)"
 
 generate-mlx: install
+	@if [ "$(UNAME_S)" != "Darwin" ]; then \
+		echo "ERROR: MLX export requires macOS on Apple Silicon (mlx-vlm has no CUDA/Linux backend)." >&2; \
+		echo "        Use the GGUF export path instead: make convert-gguf && make quantize-gguf" >&2; \
+		exit 1; \
+	fi
 	@if [ ! -f "$(MLX_OUT_DIR)/config.json" ]; then \
 		echo "ERROR: $(MLX_OUT_DIR)/config.json not found. Run 'make convert-mlx' first." >&2; \
 		exit 1; \
@@ -248,8 +316,17 @@ build-llama-cpp:
 		git -C "$(LLAMA_CPP_DIR)" fetch --depth 1 origin $(LLAMA_CPP_REF) && \
 		git -C "$(LLAMA_CPP_DIR)" checkout -q FETCH_HEAD; \
 	fi
-	@echo "==> Building llama-imatrix + llama-quantize (CPU/ARM_NEON -- ik_llama.cpp does not prioritize Metal)"
-	cmake -B "$(LLAMA_CPP_DIR)/build" -S "$(LLAMA_CPP_DIR)" -DGGML_NATIVE=ON -DCMAKE_BUILD_TYPE=Release -G Ninja
+	@echo "==> Building llama-imatrix + llama-quantize (GGML_CUDA=$(GGML_CUDA))"
+	@if [ "$(GGML_CUDA)" = "ON" ] && ! command -v nvcc >/dev/null 2>&1; then \
+		echo "ERROR: GGML_CUDA=ON but nvcc is not on PATH -- the CUDA toolkit must be installed" >&2; \
+		echo "        to build with GPU support (an NVIDIA driver alone is not enough)." >&2; \
+		echo "        Install the CUDA toolkit, or fall back to a CPU-only build with:" >&2; \
+		echo "        GGML_CUDA=OFF make build-llama-cpp" >&2; \
+		exit 1; \
+	fi
+	cmake -B "$(LLAMA_CPP_DIR)/build" -S "$(LLAMA_CPP_DIR)" -DGGML_NATIVE=ON -DCMAKE_BUILD_TYPE=Release -G Ninja \
+		-DGGML_CUDA=$(GGML_CUDA) \
+		$(if $(CUDA_ARCHITECTURES),-DCMAKE_CUDA_ARCHITECTURES="$(CUDA_ARCHITECTURES)")
 	cmake --build "$(LLAMA_CPP_DIR)/build" --config Release -j --target llama-imatrix llama-quantize
 
 calibration-text: install
@@ -285,7 +362,8 @@ quantize-gguf: build-llama-cpp calibration-text
 	@test -n "$(strip $(GGUF_QUANTS))" || { echo "ERROR: GGUF_QUANTS is empty -- nothing to quantize." >&2; exit 1; }
 	@rm -f "$(GGUF_OUT_DIR)"/model-*.gguf.tmp "$(IMATRIX_FILE).tmp"
 	@echo "==> Computing imatrix from $(CALIB_TEXT_FILE) -> $(IMATRIX_FILE)"
-	"$(LLAMA_IMATRIX)" -m "$(GGUF_F16_GGUF)" -f "$(CALIB_TEXT_FILE)" -o "$(IMATRIX_FILE).tmp"
+	"$(LLAMA_IMATRIX)" -m "$(GGUF_F16_GGUF)" -f "$(CALIB_TEXT_FILE)" -o "$(IMATRIX_FILE).tmp" \
+		$(if $(filter ON,$(GGML_CUDA)),-ngl $(LLAMA_NGL))
 	@mv -f "$(IMATRIX_FILE).tmp" "$(IMATRIX_FILE)"
 	@echo "==> Quantizing: $(GGUF_QUANTS) (writing to .tmp names first; nothing is deleted or replaced until every level below succeeds)"
 	@set -e; for q in $(GGUF_QUANTS); do \
@@ -340,3 +418,9 @@ clean:
 	@test -n "$(VENV)" && [ "$(VENV)" != "/" ] && [ "$(VENV)" != "." ] || \
 		{ echo "ERROR: VENV is unsafe: '$(VENV)'" >&2; exit 1; }
 	rm -rf "$(VENV)"
+
+# Deliberately does NOT depend on install/venv -- must be runnable with the
+# system's own python3 before ./.venv exists, so a user can check the box
+# is even worth setting up. Uses the plain "python3" from PATH, not $(PYTHON).
+doctor:
+	python3 scripts/preflight_check.py $(PREFLIGHT_ARGS)

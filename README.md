@@ -23,10 +23,151 @@ the two machine-readable artifacts those documents summarize
 
 ## Requirements
 
+This pipeline supports two tracks, depending on your hardware. Both run the
+same `make abliterate` step; they differ only in which export target(s) are
+available afterward.
+
+### Track A — macOS / Apple Silicon
+
+Full pipeline: heretic abliteration + MLX export + GGUF export.
+
 - macOS on Apple Silicon (MLX conversion needs it; the abliteration step uses the Metal backend)
 - Python 3.14 (`.python-version` pins this; install via `brew install python@3.14` if needed)
 - Homebrew `cmake` + `ninja` — only needed for the GGUF export path (`make build-llama-cpp`)
 - Disk: the heretic checkpoint alone is ~72GB (bf16) for the default model (`Qwen/Qwen3.6-35B-A3B`); budget for that plus whichever export(s) you run (MLX quantized copy, and/or GGUF F16 + quantized copies)
+
+### Track B — Linux + NVIDIA GPU (e.g. AWS EC2)
+
+heretic abliteration + GGUF export only. **MLX is not available** on this
+track — `mlx-vlm` is Apple/Metal only, and `convert-mlx`/`generate-mlx` now
+fail fast with a clear error message (instead of an obscure "command not
+found") if you run them here; use `make convert-gguf && make quantize-gguf`
+instead.
+
+- A Linux instance with an NVIDIA GPU (e.g. an EC2 `g5`/`g6e`/`p4d`/`p5`
+  instance) and an up-to-date NVIDIA driver
+- Python 3.14 — no Homebrew on Linux, so install via `pyenv`, `uv`, or the
+  `deadsnakes` PPA (Ubuntu) instead
+- `sudo apt-get install cmake ninja-build` — needed for the GGUF export
+  path (`make build-llama-cpp`)
+- An NVIDIA driver + CUDA toolkit (`nvcc` on `PATH`) for the new
+  `GGML_CUDA` build path below — or use an
+  [AWS Deep Learning AMI](https://aws.amazon.com/machine-learning/amis/),
+  which ships these preinstalled
+- The default PyPI `torch` wheel on Linux already includes CUDA support
+  for common CUDA versions, so `pip install torch` (via `make setup`)
+  normally needs no special index URL — only reach for the
+  [pytorch.org selector](https://pytorch.org/get-started/locally/) if you
+  need an unusual CUDA version or ROCm
+- Disk: see "Disk sizing on EC2" below
+
+The Makefile auto-detects an NVIDIA GPU via `nvidia-smi` and, when present,
+builds `ik_llama.cpp` with CUDA enabled (`GGML_CUDA=ON`) and GPU-offloads
+the imatrix pass — see "Key variables" below for `GGML_CUDA`,
+`CUDA_ARCHITECTURES`, and `LLAMA_NGL`.
+
+**GPU-architecture auto-detection — recommend CMake >=3.24 + CUDA toolkit
+>=11.6.** The build already passes `-DGGML_NATIVE=ON` unconditionally. On
+that combination of toolchain versions, `ik_llama.cpp`'s own CMakeLists
+(at the pinned `LLAMA_CPP_REF`) resolves `CMAKE_CUDA_ARCHITECTURES` to
+`"native"` — it auto-detects the exact compute capability of the GPU doing
+the build, correctly covering H100/H200 (compute capability 90) and
+L4/L40s/RTX-40-series (compute capability 89) with zero extra
+configuration. On an **older** CMake (<3.24) or CUDA toolkit (<11.6),
+though, it silently falls back to a hardcoded architecture list
+(`50;61;70;75;80`) that tops out at Ampere/A100 and does **not** include
+89 or 90 — a build on an L4/L40s or H100 instance with an older
+CMake/CUDA could silently miscompile or underperform for that GPU, with
+no warning from the build itself. Check with `cmake --version` /
+`nvcc --version`; if you're stuck on an older toolchain, set
+`CUDA_ARCHITECTURES` explicitly, e.g. `CUDA_ARCHITECTURES=89` for
+L4/L40s/RTX 40-series, or `CUDA_ARCHITECTURES=90` for H100/H200. `make doctor`
+checks your cmake/nvcc versions against this exact threshold and warns by
+name if a detected GPU needs this. See the `CUDA_ARCHITECTURES` row below
+and its Makefile comment for the full source citation.
+
+### Running the full-precision model on large-VRAM / multi-GPU EC2 instances
+
+Keep the default `QUANTIZATION=NONE` — do **not** switch to `BNB_4BIT`
+just to make a large model fit; that trades away model quality. heretic's
+own default `device_map="auto"` (Hugging Face Accelerate) already
+automatically shards the ~72GB bf16 default model (`Qwen/Qwen3.6-35B-A3B`)
+across every GPU visible to the process, with zero extra flags required —
+this already solves "large model, no quantization" as long as your
+instance has enough *combined* VRAM across all its GPUs.
+
+Concrete EC2 instance types with enough combined VRAM to hold that
+checkpoint plus working memory (activations, optimizer state during
+abliteration, etc.) without quantization:
+
+- `p4d.24xlarge` — 8x A100 40GB = 320GB total VRAM
+- `p5.48xlarge` — 8x H100 80GB = 640GB total VRAM
+
+A single-GPU instance (e.g. `g5`/`g6e`) does not have enough VRAM for the
+default model at full precision and will need `QUANTIZATION=BNB_4BIT`
+instead, if you explicitly accept the quality tradeoff for that model size.
+
+**System RAM on this path**: heretic only loads a full CPU copy of the base
+model (for CPU-side merge/dequantization, a ~3x-parameter-count RAM spike
+per heretic's own rule of thumb) when `QUANTIZATION=BNB_4BIT` — that spike
+does **not** apply to the `QUANTIZATION=NONE` path recommended here.
+Accelerate's sharded loading and its `offload_outputs_to_cpu` analysis-tensor
+staging still use host RAM transiently on any path, though, so as a simple
+rule of thumb, system RAM should comfortably exceed the model's on-disk
+size. The `p4d.24xlarge` (1.1TB RAM) / `p5.48xlarge` (2TB RAM) instances
+above vastly exceed this for the default ~72GB model, so RAM is not a
+binding constraint on those specific instance types.
+
+For advanced per-GPU tuning on a multi-GPU box (e.g. pinning everything to
+one device, or capping per-GPU memory on a heterogeneous mix of GPUs), the
+Makefile now exposes optional `DEVICE_MAP` and `MAX_MEMORY` passthrough
+variables — both empty (no-op) by default, so the default path above is
+unchanged unless you explicitly set them. The flag names (`--device-map`/
+`--max-memory`) are confirmed correct via heretic's `src/heretic/config.py`
+(`cli_kebab_case=True` in its `CliSettingsSource(...)` call — the same
+mechanism behind the already-used `--quantization`/`--model-commit`/
+`--export-strategy` flags). See "Key variables" below for the `MAX_MEMORY`
+value-format example.
+
+Run `make doctor` first to confirm the instance actually has enough
+CPU/RAM/disk/VRAM before starting a multi-hour `make abliterate` run.
+
+### Disk sizing on EC2
+
+EC2 default root (EBS) volumes are far smaller than this pipeline needs,
+and EC2 instances commonly mount a large data volume separately from a
+small root volume.
+
+**Set `HF_HOME` before you run anything.** Hugging Face's model-download
+cache defaults to `$HF_HOME`, or `~/.cache/huggingface` if `HF_HOME` is
+unset — a location completely independent of this repo's `OUT_DIR`/
+`GGUF_OUT_DIR`. If you don't redirect `HF_HOME` to whichever volume
+actually has the space, the ~72GB raw model download can silently fill up
+a small root volume even though `OUT_DIR`/`GGUF_OUT_DIR` point at plenty
+of free space on the big one:
+
+```sh
+export HF_HOME=/data/hf-cache   # point at whichever volume has the space
+make abliterate
+```
+
+For a full GGUF run with the default model and default `GGUF_QUANTS`, the
+disk cost breaks down as:
+
+| Component | Size |
+|---|---|
+| HF Hub raw download cache (`HF_HOME`) | ~72GB |
+| heretic's merged `OUT_DIR` export | ~72GB |
+| Full-resolution GGUF (F16) | ~72GB |
+| `Q4_K_M` quant | ~4.5GB |
+| `Q8_0` quant | ~38GB |
+| **Total** | **~260GB minimum** |
+
+Budget **at least 400GB** of gp3 EBS (split across `HF_HOME` and the
+output volume as appropriate) to leave real headroom for the OS, heretic's
+Optuna study checkpoints, logs, and swap. `make doctor` checks free space
+at both the pipeline's output path and the resolved HF cache path (and
+flags it if they happen to share a filesystem) against this 400GB floor.
 
 ## Quick start
 
@@ -163,6 +304,7 @@ a sidecar `<name>.provenance.json` recording exactly what produced it
 | `make lock` | Freeze exact installed package versions → `requirements-lock.txt` |
 | `make notices` | Regenerate the full third-party license manifest → `third_party_licenses.json` |
 | `make clean` | Remove `./.venv` |
+| `make doctor` | Check CPU/RAM/disk/GPU-VRAM against this pipeline's needs (stdlib-only, runs before `./.venv` exists) — see [`scripts/preflight_check.py`](scripts/preflight_check.py) |
 
 Run `make help` any time for the same summary with your current variable values resolved in.
 
@@ -187,6 +329,11 @@ All have sane defaults; override on the command line, e.g. `make convert-mlx Q_B
 | `GGUF_F16_GGUF` | `GGUF_OUT_DIR/model-<type>.gguf` | Path `quantize-gguf` reads back in; override to point at an existing conversion |
 | `CALIB_TEXT_DATASET` / `CALIB_TEXT_SPLIT` / `CALIB_TEXT_SAMPLES` / `CALIB_TEXT_REVISION` | `tatsu-lab/alpaca` / `train` / `100` / pinned commit | Source for `calibration-text.txt` — **`tatsu-lab/alpaca` is CC-BY-NC-4.0, see `PROVENANCE.md` §4** |
 | `LLAMA_CPP_REF` | a pinned commit SHA | `ik_llama.cpp` commit `build-llama-cpp` fetches — not the moving default branch |
+| `GGML_CUDA` | auto-detected (`ON` if `nvidia-smi` is on `PATH`, else `OFF`) | Whether `build-llama-cpp` builds `ik_llama.cpp` with CUDA support; override `GGML_CUDA=ON`/`OFF` to force either way |
+| `CUDA_ARCHITECTURES` | empty (unset) | Optional `-DCMAKE_CUDA_ARCHITECTURES` override, e.g. `"80;86;90"` — left empty by default so ik_llama.cpp's own CMakeLists picks its default target list, which resolves to auto-detected `"native"` on CMake >=3.24 + CUDA toolkit >=11.6, but falls back to a hardcoded list capped at compute capability 80 (missing 89/L4-L40s-RTX40 and 90/H100-H200) on older toolchains — set this explicitly (`89` or `90`) if you're on an older CMake/CUDA and targeting one of those GPUs; see the Track B section above |
+| `LLAMA_NGL` | `999` | GPU layers offloaded to `llama-imatrix` when `GGML_CUDA=ON` (999 = all layers, clamped to the model's actual layer count); ignored when `GGML_CUDA=OFF` |
+| `DEVICE_MAP` / `MAX_MEMORY` | empty (no-op) | Optional passthrough to heretic's `--device-map`/`--max-memory` for advanced multi-GPU tuning; empty by default so heretic's own `device_map="auto"` (Accelerate auto-sharding across all visible GPUs) is used unchanged. Flag names confirmed via `cli_kebab_case=True` in `src/heretic/config.py`'s `CliSettingsSource(...)` call (same mechanism as `--quantization`/`--model-commit`). `DEVICE_MAP` takes a plain string (`auto`, `balanced`, `sequential`, `cuda:0`, ...). `MAX_MEMORY` takes pydantic-settings' comma-separated dict CLI syntax, e.g. `MAX_MEMORY="0=20GiB,1=20GiB,cpu=64GiB"` (device index or `cpu` as key, size string as value — matches Accelerate's own `max_memory` dict convention) |
+| `PREFLIGHT_ARGS` | empty | Extra args forwarded to `scripts/preflight_check.py` by `make doctor`, e.g. `PREFLIGHT_ARGS="--require-gpu --min-vram-gb 600"` |
 
 See the `Makefile` itself for the full list and inline rationale comments.
 
@@ -229,12 +376,18 @@ See the `Makefile` itself for the full list and inline rationale comments.
 - **GGUF toolchain choice**: uses the `ik_llama.cpp` fork rather than mainline `ggml-org/llama.cpp`.
   Mainline has open bugs in the hybrid linear-attention tensor conversion that
   `Qwen3.6-35B-A3B`'s architecture uses; `ik_llama.cpp` has dedicated, verified
-  support for this model family. Trade-off: `ik_llama.cpp` does not prioritize
-  Metal, so `llama-imatrix` runs on CPU/ARM_NEON (well-supported, just slower
-  than GPU offload). `build-llama-cpp` fetches a **pinned commit** (`LLAMA_CPP_REF`),
-  not the moving default branch, so a from-scratch clone always reproduces
-  the same tested toolchain instead of whatever happens to be tip-of-branch
-  on a given day.
+  support for this model family. Trade-off is platform-dependent: on **macOS**,
+  `ik_llama.cpp` still does not prioritize Metal, so `llama-imatrix` runs on
+  CPU/ARM_NEON there (well-supported, just slower than GPU offload). On
+  **Linux with an NVIDIA GPU**, the Makefile now auto-detects `nvidia-smi`
+  and builds with `-DGGML_CUDA=ON`, so `llama-imatrix` runs with GPU offload
+  (`-ngl $(LLAMA_NGL)`, default all layers) instead. Either way,
+  `llama-quantize` itself remains CPU-bound on every platform regardless of
+  `GGML_CUDA` — quantization/repacking isn't GPU-accelerated in
+  llama.cpp/ik_llama.cpp. `build-llama-cpp` fetches a **pinned commit**
+  (`LLAMA_CPP_REF`), not the moving default branch, so a from-scratch clone
+  always reproduces the same tested toolchain instead of whatever happens to
+  be tip-of-branch on a given day.
 - **AWQ calibration cost**: `mlx_vlm.convert`'s AWQ path forwards every file in
   `calibration-images/` through the full model, unbatched, with no cap — keep
   `CALIB_SAMPLES` small (tens, not thousands). AWQ only needs a small, diverse
