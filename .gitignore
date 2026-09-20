@@ -1,0 +1,115 @@
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# PyInstaller
+*.manifest
+*.spec
+
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+.pytest_cache/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# Environments
+.env
+.env.*
+
+# mypy / ruff / pyright
+.mypy_cache/
+.dmypy.json
+dmypy.json
+.ruff_cache/
+.pyright/
+
+# IDEs / editors
+.idea/
+.vscode/
+*.swp
+
+# OS
+.DS_Store
+
+# OpenCode agent session state (not part of the project)
+.omo/
+
+# ik_llama.cpp / llama.cpp tools default to writing a log file into the
+# current working directory (confirmed: llama-imatrix --help does this)
+llama.log
+
+# Vendored reference clones (e.g. codegraph indexing heretic-llm's own
+# source for cross-referencing) - not part of this project
+vendor/
+
+# Heretic / model artifacts and outputs (large binary files - keep repo light)
+*.safetensors
+*.bin
+*.gguf
+*.pt
+*.pth
+models/
+outputs/
+calibration-images/
+calibration-images.tmp/
+calibration-text.txt
+calibration-text.txt.tmp
+ik_llama.cpp/
+checkpoints/
+*.png
+*.gif
+!docs/**/*.png
+
+# Chain-of-custody / audit artifacts: requirements-lock.txt,
+# third_party_licenses.json, and the root-level *.provenance.json sidecars
+# (calibration-images.provenance.json, calibration-text.txt.provenance.json)
+# are intentionally TRACKED, not ignored -- see PROVENANCE.md and
+# THIRD_PARTY_NOTICES.md. Only their transient .tmp write targets are
+# ignored here.
+*.provenance.json.tmp
+requirements-lock.txt.tmp
+third_party_licenses.json.tmp

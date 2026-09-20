@@ -1,0 +1,21 @@
+# PyTorch 2.2+ - install the build appropriate for your hardware.
+# On macOS (Apple Silicon/Intel) and most Linux/Windows CPU setups, the
+# default PyPI wheel below is correct and includes Apple MPS acceleration.
+# For NVIDIA CUDA or AMD ROCm builds, follow the selector at
+# https://pytorch.org/get-started/locally/ and install torch from the
+# matching --index-url *before* installing the rest of this file.
+torch>=2.2
+torchvision>=0.17
+
+# Required by transformers' image processors (e.g. Qwen2VLImageProcessor)
+# for vision-language models such as Qwen3.6-35B-A3B.
+pillow>=10.0
+
+# Heretic: fully automatic censorship removal for language models
+# https://github.com/p-e-w/heretic
+heretic-llm
+
+# mlx-vlm: convert/quantize Hugging Face vision-language checkpoints to
+# Apple's MLX format after Heretic has abliterated them, and run them
+# locally via mlx-lm's Metal backend. macOS + Apple Silicon only.
+mlx-vlm>=0.1; sys_platform == "darwin"
