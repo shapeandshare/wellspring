@@ -21,6 +21,14 @@ reading before commercial use). `make lock` and `make notices` regenerate
 the two machine-readable artifacts those documents summarize
 (`requirements-lock.txt`, `third_party_licenses.json`).
 
+## Governance
+
+Project principles (provenance discipline, atomic operations, license
+awareness, simplicity-first) are codified in
+[`.specify/memory/constitution.md`](.specify/memory/constitution.md). It
+supersedes other docs on governance questions; this README, `PROVENANCE.md`,
+and `ROADMAP.md` remain the authoritative operational references it points to.
+
 ## Requirements
 
 This pipeline supports two tracks, depending on your hardware. Both run the
@@ -292,6 +300,7 @@ a sidecar `<name>.provenance.json` recording exactly what produced it
 |---|---|
 | `make setup` | Create `./.venv` (Python 3.14) and install `requirements.txt` |
 | `make venv` / `make install` | Granular halves of `setup` |
+| `make test` | Run the `pytest` suite (`tests/`) — required to pass before any change touching `scripts/`, per the [constitution](.specify/memory/constitution.md)'s Article IX |
 | `make abliterate` | Run `heretic` against `MODEL` with merge pre-selected; you still interactively choose to save and enter a path |
 | `make calibration-data` | Fetch `CALIB_SAMPLES` real COCO images into `calibration-images/`, for MLX AWQ calibration |
 | `make convert-mlx` | Convert `HF_PATH` → MLX format (`MLX_OUT_DIR`), AWQ-quantized by default |
