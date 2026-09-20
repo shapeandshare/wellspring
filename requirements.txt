@@ -19,3 +19,8 @@ heretic-llm
 # Apple's MLX format after Heretic has abliterated them, and run them
 # locally via mlx-lm's Metal backend. macOS + Apple Silicon only.
 mlx-vlm>=0.1; sys_platform == "darwin"
+
+# pytest: backs the test suite (`make test`, tests/) required by the
+# constitution's Article IX (Test-Driven Development). Dev/test tooling
+# only -- never imported by a pipeline stage itself.
+pytest>=8.0
