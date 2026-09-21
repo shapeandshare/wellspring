@@ -180,9 +180,19 @@ flags it if they happen to share a filesystem) against this 400GB floor.
 ## Quick start
 
 ```sh
+git clone <this-repo-url> && cd wellspring
 make setup                                     # create ./.venv, install requirements.txt
 make abliterate                                # run heretic against MODEL (default: Qwen/Qwen3.6-35B-A3B)
 ```
+
+`make setup` best-effort populates `vendor/heretic` too — a read-only,
+pinned copy of heretic's own source kept for local reference (e.g.
+codegraph indexing). It's optional and never blocks: if you're offline,
+building from a tarball with no `.git`, or on a CI runner without git
+submodule support, `make setup` warns and continues — the pipeline's
+actual runtime dependency is `heretic-llm` from PyPI (installed by the
+same `make setup`), not this directory. Populate it manually any time
+with `git submodule update --init vendor/heretic`. See `PROVENANCE.md` §5.
 
 `heretic` will interactively ask what to do with the result near the end of
 the run (save/upload/chat/benchmark) — choose save, then enter a path (a
@@ -298,8 +308,9 @@ a sidecar `<name>.provenance.json` recording exactly what produced it
 
 | Target | Does |
 |---|---|
-| `make setup` | Create `./.venv` (Python 3.14) and install `requirements.txt` |
-| `make venv` / `make install` | Granular halves of `setup` |
+| `make setup` | Create `./.venv` (Python 3.14), install `requirements.txt`, and best-effort populate `vendor/heretic` (never blocks — see `make vendor-heretic`) |
+| `make venv` / `make install` | Granular halves of `setup`'s environment setup |
+| `make vendor-heretic` | Populate the `vendor/heretic` reference submodule; warns and continues (never fails the build, always exits `0`) if offline, tarball-checked-out, submodules are unsupported, or the remote is unreachable — bounded to `VENDOR_HERETIC_TIMEOUT` seconds (default `20`) rather than hanging on a firewalled/unroutable host |
 | `make test` | Run the `pytest` suite (`tests/`) — required to pass before any change touching `scripts/`, per the [constitution](.specify/memory/constitution.md)'s Article IX |
 | `make abliterate` | Run `heretic` against `MODEL` with merge pre-selected; you still interactively choose to save and enter a path |
 | `make calibration-data` | Fetch `CALIB_SAMPLES` real COCO images into `calibration-images/`, for MLX AWQ calibration |
@@ -431,3 +442,24 @@ See the `Makefile` itself for the full list and inline rationale comments.
   (`outputs/`, `calibration-images/` (+ its `.tmp` sibling), `calibration-text.txt`
   (+ its `.tmp` sibling), `ik_llama.cpp/`, `*.gguf`, etc.) — nothing here is
   meant to be committed.
+- **`vendor/heretic` is a vendored reference copy, not the runtime — and
+  populating it never blocks a build, even against an unreachable
+  network.** It's a git submodule pinned to the same `heretic-llm`
+  version this pipeline installs from PyPI (see `PROVENANCE.md` §5) —
+  kept for local reference and tooling that cross-references heretic's
+  own source (e.g. codegraph indexing), not because the pipeline runs
+  code from it. `make abliterate` runs `$(VENV)/bin/heretic`, the
+  pip-installed console script, regardless of whether `vendor/heretic`
+  is checked out. `make setup`'s `vendor-heretic` step is deliberately
+  best-effort: no `.git` present (a release tarball) or an already
+  git-submodule-unaware checkout produce a `WARNING` immediately; a
+  firewalled/unroutable remote is bounded to `VENDOR_HERETIC_TIMEOUT`
+  seconds (default `20`, override with e.g.
+  `make setup VENDOR_HERETIC_TIMEOUT=5`) rather than hanging forever —
+  `git`'s own `http.lowSpeedLimit`/`lowSpeedTime` only bound a *stalled
+  transfer*, not the initial connection attempt to an unroutable host,
+  so this is enforced by the Makefile itself, empirically confirmed
+  against an unroutable address in development. Either way, `install`/
+  `test`/every export target has no dependency on this directory.
+  Populate it manually any time with
+  `git submodule update --init vendor/heretic`.

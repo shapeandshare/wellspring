@@ -1,0 +1,3 @@
+[submodule "vendor/heretic"]
+	path = vendor/heretic
+	url = https://github.com/p-e-w/heretic.git
