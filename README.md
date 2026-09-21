@@ -316,6 +316,7 @@ a sidecar `<name>.provenance.json` recording exactly what produced it
 | `make calibration-data` | Fetch `CALIB_SAMPLES` real COCO images into `calibration-images/`, for MLX AWQ calibration |
 | `make convert-mlx` | Convert `HF_PATH` → MLX format (`MLX_OUT_DIR`), AWQ-quantized by default |
 | `make generate-mlx` | Smoke-test the MLX output with a short generation |
+| `make paper` | Fetch the pinned reference paper (Arditi et al. 2024, arXiv:2406.11717v3) into `references/`, plus a tracked `.provenance.json` sidecar; the PDF itself is git-ignored (arXiv non-exclusive license — see `PROVENANCE.md`) |
 | `make build-llama-cpp` | Fetch (pinned commit) + build `ik_llama.cpp` (`llama-imatrix`, `llama-quantize`) |
 | `make convert-gguf` | Convert `HF_PATH` → full-resolution `GGUF_F16_GGUF` (no quantization); rejects a quantized `GGUF_F16_TYPE` |
 | `make calibration-text` | Fetch `CALIB_TEXT_SAMPLES` chat/instruction rows into `calibration-text.txt`, for GGUF imatrix calibration |
@@ -353,6 +354,14 @@ All have sane defaults; override on the command line, e.g. `make convert-mlx Q_B
 | `CUDA_ARCHITECTURES` | empty (unset) | Optional `-DCMAKE_CUDA_ARCHITECTURES` override, e.g. `"80;86;90"` — left empty by default so ik_llama.cpp's own CMakeLists picks its default target list, which resolves to auto-detected `"native"` on CMake >=3.24 + CUDA toolkit >=11.6, but falls back to a hardcoded list capped at compute capability 80 (missing 89/L4-L40s-RTX40 and 90/H100-H200) on older toolchains — set this explicitly (`89` or `90`) if you're on an older CMake/CUDA and targeting one of those GPUs; see the Track B section above |
 | `LLAMA_NGL` | `999` | GPU layers offloaded to `llama-imatrix` when `GGML_CUDA=ON` (999 = all layers, clamped to the model's actual layer count); ignored when `GGML_CUDA=OFF` |
 | `DEVICE_MAP` / `MAX_MEMORY` | empty (no-op) | Optional passthrough to heretic's `--device-map`/`--max-memory` for advanced multi-GPU tuning; empty by default so heretic's own `device_map="auto"` (Accelerate auto-sharding across all visible GPUs) is used unchanged. Flag names confirmed via `cli_kebab_case=True` in `src/heretic/config.py`'s `CliSettingsSource(...)` call (same mechanism as `--quantization`/`--model-commit`). `DEVICE_MAP` takes a plain string (`auto`, `balanced`, `sequential`, `cuda:0`, ...). `MAX_MEMORY` takes pydantic-settings' comma-separated dict CLI syntax, e.g. `MAX_MEMORY="0=20GiB,1=20GiB,cpu=64GiB"` (device index or `cpu` as key, size string as value — matches Accelerate's own `max_memory` dict convention) |
+| `PAPER_ARXIV_ID` | `2406.11717` | arXiv id (no version suffix) of the reference paper `make paper` fetches — see `PROVENANCE.md` §8 |
+| `PAPER_ARXIV_VERSION` | `v3` | Exact arXiv version to pin (the revision being reproduced; arXiv has no commit hashes) |
+| `PAPER_TITLE` | the Arditi et al. 2024 title | Paper title recorded in the manifest; override together with the id/version if you retarget it |
+| `PAPER_AUTHORS` | the paper's 7 authors | Comma-separated authors recorded in the manifest |
+| `PAPER_LICENSE` | `arXiv.org perpetual, non-exclusive license to distribute 1.0` | License recorded in the manifest — **non-permissive**; the PDF stays git-ignored |
+| `PAPER_LICENSE_URL` | arXiv's nonexclusive-distrib/1.0 URL | URL of the license text, recorded in the manifest |
+| `PAPER_OUT` | `references/<id><version>.pdf` | Where `make paper` writes the PDF (git-ignored); its `.provenance.json` sidecar goes alongside and **is** tracked |
+| `PAPER_TIMEOUT` | `60` | Network timeout (seconds) for the paper download |
 | `PREFLIGHT_ARGS` | empty | Extra args forwarded to `scripts/preflight_check.py` by `make doctor`, e.g. `PREFLIGHT_ARGS="--require-gpu --min-vram-gb 600"` |
 
 See the `Makefile` itself for the full list and inline rationale comments.

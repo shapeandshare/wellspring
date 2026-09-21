@@ -109,6 +109,15 @@ checkpoints/
 *.gif
 !docs/**/*.png
 
+# Reference paper (make paper). Fetched on demand and NEVER redistributed:
+# the arXiv record uses arXiv's nonexclusive-distrib/1.0 license, which does
+# not grant us redistribution rights (see PROVENANCE.md). The PDF is a
+# transient local artifact; its <name>.pdf.provenance.json sidecar IS tracked
+# as the chain-of-custody record (title/authors/license, pinned version,
+# source URL, SHA-256).
+references/*.pdf
+references/*.pdf.tmp
+
 # Chain-of-custody / audit artifacts: requirements-lock.txt,
 # third_party_licenses.json, and the root-level *.provenance.json sidecars
 # (calibration-images.provenance.json, calibration-text.txt.provenance.json)

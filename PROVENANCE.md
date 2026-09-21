@@ -16,6 +16,7 @@ doesn't repeat.
 | Our calibration image/text datasets | **Yes** | `CALIB_REVISION` / `CALIB_TEXT_REVISION` — passed as `--revision` to the fetch scripts, which forward it as a `revision=` query param to HF's datasets-server API |
 | The base model (`MODEL`) | **No, by design** | `MODEL_COMMIT` defaults to `null` (heretic's own "latest" behavior) because a fixed SHA is only valid paired with one specific `MODEL` value — see §2 |
 | Python package versions | **Partially** | `requirements.txt` uses ranges (for compatible-fix pickup); `requirements-lock.txt` (`make lock`) captures exact versions actually installed |
+| Reference paper (Arditi et al. 2024) | **Yes** | `PAPER_ARXIV_ID` / `PAPER_ARXIV_VERSION` — an exact arXiv *version* via `make paper`, since arXiv is not a git repo; attribution + SHA-256 recorded in a tracked sidecar — see §8 |
 | GPU/Metal floating-point execution order | **No** | Not controllable from this pipeline — see §6 |
 
 ## 2. Base model
@@ -198,3 +199,59 @@ nondeterminism noted in §6. The resulting `outputs/**/*.provenance.json`,
 `calibration-*.provenance.json`, `requirements-lock.txt`, and
 `third_party_licenses.json` together document exactly what produced the
 final MLX/GGUF artifacts.
+
+To also persist the reference paper this pipeline's method derives from:
+
+```sh
+make paper      # -> references/<arxiv-id><version>.pdf (+ tracked .provenance.json)
+```
+
+## 8. Reference paper (not a pipeline input)
+
+The technique this pipeline automates — directional ablation
+("abliteration") — comes from one external paper, which Heretic's own
+README cites as the original:
+
+- **Title**: *Refusal in Language Models Is Mediated by a Single Direction*
+- **Authors**: Andy Arditi, Oscar Obeso, Aaquib Syed, Daniel Paleka,
+  Nina Panickssery, Wes Gurnee, Neel Nanda
+- **Identifier**: arXiv:**2406.11717v3** (submitted 2024-06-17, this version
+  last revised 2024-10-30)
+- **DOI**: `10.48550/arXiv.2406.11717`
+- **Abstract page**: https://arxiv.org/abs/2406.11717v3
+- **PDF**: https://arxiv.org/pdf/2406.11717v3
+- **License**: arXiv.org perpetual, **non-exclusive** license to distribute
+  (https://arxiv.org/licenses/nonexclusive-distrib/1.0/) — the authors
+  retain copyright; arXiv receives only a non-exclusive distribution
+  license. This is **not** a redistribution grant to us.
+
+**⚠️ License handling.** Because the arXiv license is not a permissive
+redistribution license, this repository does **not** commit the PDF.
+`make paper` (→ `scripts/fetch_paper.py`) downloads the exact pinned version
+on demand into a **git-ignored** path (`references/<id><version>.pdf`,
+see `.gitignore`) — a transient local artifact, treated the same way as the
+COCO images and Alpaca text used for calibration (§4), which this pipeline
+also uses but does not redistribute. Do not commit the PDF; the ignore rule
+is there to prevent it.
+
+**What *is* tracked** is the pull's chain-of-custody record: the
+`<out>.provenance.json` sidecar written alongside the PDF records the title,
+authors, license and license URL, the exact pinned arXiv version, the
+abstract/PDF source URLs, the retrieval timestamp, the byte size, the
+SHA-256 of the downloaded file, and this repository's own commit/dirty state
+(Article I Rule 3). The PDF bytes are reproducible from the pinned URL and
+verifiable against the recorded hash; the sidecar is the part that belongs
+in version control.
+
+Pinning note: arXiv has no immutable commit hashes, so the **version suffix**
+(`v3`) *is* the revision pin — `PAPER_ARXIV_ID=2406.11717` +
+`PAPER_ARXIV_VERSION=v3` in the Makefile. Both are safe, paper-specific
+defaults (unlike `MODEL_COMMIT`, §2, they don't depend on any other
+variable). Overriding the id/version means also overriding `PAPER_TITLE`,
+`PAPER_AUTHORS`, `PAPER_LICENSE`, and `PAPER_LICENSE_URL`, or the recorded
+attribution would describe the wrong paper.
+
+This paper is **reference/attribution material only** — nothing in the
+pipeline reads it, and it is not a prerequisite of `abliterate` or either
+export path. It exists so an audit can see the source of the method, not
+because any stage consumes it.
