@@ -173,6 +173,27 @@ CALIB_TEXT_FILE     ?= calibration-text.txt
 # context. Passed to fetch_calibration_text.py's --revision.
 CALIB_TEXT_REVISION ?= dce01c9b08f87459cf36a430d809084718273017
 
+# --- Reference paper (make paper) -------------------------------------------
+# The paper this pipeline's method derives from: Heretic's directional
+# ablation is based on Arditi et al. 2024, which Heretic's own README cites
+# as the technique's source. Pinned to an EXACT arXiv version (arXiv is not
+# a git repo, so the version suffix is the revision pin). License note:
+# arXiv's record links to its nonexclusive-distrib/1.0 license -- authors
+# retain copyright, arXiv gets only a non-exclusive distribution license, so
+# that PDF is fetched on demand and git-ignored, NEVER redistributed in this
+# repo (see .gitignore and PROVENANCE.md). The tracked <out>.provenance.json
+# sidecar records title/authors/license, the pinned version, source URL, and
+# SHA-256. Overriding the id/version means also overriding the title/authors/
+# license vars, or the recorded attribution would describe the wrong paper.
+PAPER_ARXIV_ID      ?= 2406.11717
+PAPER_ARXIV_VERSION ?= v3
+PAPER_TITLE         ?= Refusal in Language Models Is Mediated by a Single Direction
+PAPER_AUTHORS       ?= Andy Arditi, Oscar Obeso, Aaquib Syed, Daniel Paleka, Nina Panickssery, Wes Gurnee, Neel Nanda
+PAPER_LICENSE       ?= arXiv.org perpetual, non-exclusive license to distribute 1.0
+PAPER_LICENSE_URL   ?= http://arxiv.org/licenses/nonexclusive-distrib/1.0/
+PAPER_OUT           ?= references/$(PAPER_ARXIV_ID)$(PAPER_ARXIV_VERSION).pdf
+PAPER_TIMEOUT       ?= 60
+
 # --- MLX smoke test (make generate-mlx) -------------------------------------
 PROMPT     ?= Hello, how are you?
 MAX_TOKENS ?= 100
@@ -183,7 +204,7 @@ MAX_TOKENS ?= 100
 # Empty by default (script's own defaults apply).
 PREFLIGHT_ARGS ?=
 
-.PHONY: help setup venv install test vendor-heretic abliterate convert-mlx calibration-data build-llama-cpp calibration-text convert-gguf quantize-gguf gguf generate-mlx lock notices clean doctor
+.PHONY: help setup venv install test vendor-heretic abliterate convert-mlx calibration-data build-llama-cpp calibration-text convert-gguf quantize-gguf gguf generate-mlx paper lock notices clean doctor
 
 help:
 	@echo "Wellspring: Heretic + MLX/GGUF workflow"
@@ -222,6 +243,9 @@ help:
 	@echo "                                       any time without repeating convert-gguf"
 	@echo "  make gguf [HF_PATH=dir]             convert-gguf then quantize-gguf, strictly in that order"
 	@echo "  make generate-mlx [MLX_OUT_DIR=dir] Smoke-test a converted MLX model"
+	@echo "  make paper                          Fetch the pinned reference paper (arXiv:$(PAPER_ARXIV_ID)$(PAPER_ARXIV_VERSION))"
+	@echo "                                       into $(PAPER_OUT) + a tracked provenance manifest"
+	@echo "                                       (PDF git-ignored -- arXiv non-exclusive license, see PROVENANCE.md)"
 	@echo "  make lock                           Freeze exact installed versions -> requirements-lock.txt"
 	@echo "  make notices                        Regenerate third_party_licenses.json (pip-licenses)"
 	@echo "  make clean                          Remove ./.venv"
@@ -455,6 +479,19 @@ quantize-gguf: build-llama-cpp calibration-text
 # skip the expensive conversion.
 gguf: convert-gguf
 	@$(MAKE) quantize-gguf
+
+# Fetch the pinned reference paper (see the PAPER_* block above). The PDF
+# itself is git-ignored/transient; the tracked <out>.provenance.json records
+# the exact pinned arXiv version, attribution, source URL, and SHA-256. Not a
+# prerequisite of, or feed into, any export target -- purely reference /
+# chain-of-custody material.
+paper: install
+	@echo "==> Fetching $(PAPER_TITLE) (arXiv:$(PAPER_ARXIV_ID)$(PAPER_ARXIV_VERSION)) -> $(PAPER_OUT)"
+	$(PYTHON) scripts/fetch_paper.py \
+		--arxiv-id $(PAPER_ARXIV_ID) --arxiv-version $(PAPER_ARXIV_VERSION) \
+		--title "$(PAPER_TITLE)" --authors "$(PAPER_AUTHORS)" \
+		--license "$(PAPER_LICENSE)" --license-url "$(PAPER_LICENSE_URL)" \
+		--out "$(PAPER_OUT)" --timeout $(PAPER_TIMEOUT)
 
 # --- Chain-of-custody / audit artifacts -------------------------------------
 # `requirements.txt` uses version ranges so the project keeps picking up

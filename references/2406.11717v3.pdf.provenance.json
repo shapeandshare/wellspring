@@ -1,0 +1,18 @@
+{
+  "abs_url": "https://arxiv.org/abs/2406.11717v3",
+  "arxiv_id": "2406.11717",
+  "arxiv_version": "v3",
+  "authors": "Andy Arditi, Oscar Obeso, Aaquib Syed, Daniel Paleka, Nina Panickssery, Wes Gurnee, Neel Nanda",
+  "bytes": 1107843,
+  "license": "arXiv.org perpetual, non-exclusive license to distribute 1.0",
+  "license_url": "http://arxiv.org/licenses/nonexclusive-distrib/1.0/",
+  "note": "The PDF is fetched on demand and git-ignored (arXiv's non-exclusive license does not grant redistribution); this manifest is the tracked chain-of-custody record. See PROVENANCE.md.",
+  "pdf_url": "https://arxiv.org/pdf/2406.11717v3",
+  "retrieved_at_utc": "2026-09-21T23:09:38.544945+00:00",
+  "sha256": "d0d5ee986084d6c77b0d73a0568e607afcb0c0a124fbbaae5c831c346b2a0780",
+  "step": "paper",
+  "timeout_seconds": 60,
+  "title": "Refusal in Language Models Is Mediated by a Single Direction",
+  "wellspring_commit": "b50044171fdd4aa6d26c0e7fe2b688d18a635d6c",
+  "wellspring_dirty": true
+}
