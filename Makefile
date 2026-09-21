@@ -183,12 +183,13 @@ MAX_TOKENS ?= 100
 # Empty by default (script's own defaults apply).
 PREFLIGHT_ARGS ?=
 
-.PHONY: help setup venv install test abliterate convert-mlx calibration-data build-llama-cpp calibration-text convert-gguf quantize-gguf gguf generate-mlx lock notices clean doctor
+.PHONY: help setup venv install test vendor-heretic abliterate convert-mlx calibration-data build-llama-cpp calibration-text convert-gguf quantize-gguf gguf generate-mlx lock notices clean doctor
 
 help:
 	@echo "Wellspring: Heretic + MLX/GGUF workflow"
 	@echo ""
-	@echo "  make setup                          Create ./.venv and install requirements.txt"
+	@echo "  make setup                          Create ./.venv, install requirements.txt, and"
+	@echo "                                       best-effort populate vendor/heretic (never blocks)"
 	@echo "  make venv                          Create ./.venv (python3.14)"
 	@echo "  make install                       Install requirements.txt into ./.venv"
 	@echo "  make test                           Run the pytest suite (tests/) -- see the"
@@ -236,7 +237,66 @@ venv: $(VENV)/bin/python
 install: venv
 	$(PYTHON) -m pip install -U -r requirements.txt
 
-setup: install
+# Seconds to wait for `make vendor-heretic` before giving up. Deliberately
+# small: this is a best-effort convenience step, never something worth
+# stalling `make setup` over. Neither GNU `timeout(1)` nor `gtimeout` are
+# guaranteed present (stock macOS has neither), and git has no config
+# equivalent to curl's --connect-timeout for the initial TCP handshake --
+# http.lowSpeedLimit/lowSpeedTime only bound a STALLED transfer, not an
+# unroutable/firewalled host hanging at connect() -- confirmed empirically
+# hanging past 60s against an unroutable address in dev. So the bound below
+# is enforced with a portable background-job-plus-poll loop instead.
+VENDOR_HERETIC_TIMEOUT ?= 20
+
+# Best-effort, non-blocking population of vendor/heretic (a git submodule --
+# see .gitmodules and PROVENANCE.md Sec. 5). This is a read-only reference
+# copy of heretic's own source; the pipeline itself installs and runs the
+# pip package (heretic-llm, see `install` above) regardless of whether this
+# target succeeds. Deliberately NOT a prerequisite of `install`, `test`, or
+# any export target -- those must keep working with no network access to
+# GitHub, no git submodule support, or an unreachable/firewalled remote
+# (e.g. a CI checkout of a tarball, or a sandboxed build with restricted
+# network egress). Never exits non-zero: a failure OR a timeout here is a
+# WARNING, not a build failure -- `$(MAKE) -k`/CI callers see this target
+# always return 0.
+vendor-heretic:
+	@if [ ! -e .git ]; then \
+		echo "NOTE: no .git found (e.g. a release tarball or export) -- skipping vendor/heretic;" ; \
+		echo "      it is reference-only and not required to run this pipeline."; \
+	elif [ -e vendor/heretic/.git ]; then \
+		echo "vendor/heretic already populated."; \
+	else \
+		echo "==> Populating vendor/heretic (reference-only; safe to skip -- see PROVENANCE.md Sec. 5)"; \
+		LOGFILE=$$(mktemp /tmp/wellspring-vendor-heretic.XXXXXX); \
+		( git submodule update --init vendor/heretic >"$$LOGFILE" 2>&1; \
+		  echo $$? >>"$$LOGFILE.rc" ) & \
+		CHILD=$$!; \
+		WAITED=0; \
+		while kill -0 "$$CHILD" 2>/dev/null && [ "$$WAITED" -lt "$(VENDOR_HERETIC_TIMEOUT)" ]; do \
+			sleep 1; WAITED=$$((WAITED + 1)); \
+		done; \
+		if kill -0 "$$CHILD" 2>/dev/null; then \
+			kill -9 "$$CHILD" 2>/dev/null; \
+			wait "$$CHILD" 2>/dev/null; \
+			echo "WARNING: vendor/heretic clone did not finish within $(VENDOR_HERETIC_TIMEOUT)s" >&2; \
+			echo "         (likely an unreachable/firewalled remote) -- giving up and" >&2; \
+			echo "         continuing without it." >&2; \
+			git submodule deinit -f vendor/heretic >/dev/null 2>&1 || true; \
+		else \
+			RC=$$(cat "$$LOGFILE.rc" 2>/dev/null || echo 1); \
+			if [ "$$RC" != "0" ]; then \
+				echo "WARNING: could not populate vendor/heretic (no network, or a checkout" >&2; \
+				echo "         without git submodule support) -- continuing without it." >&2; \
+				cat "$$LOGFILE" >&2 2>/dev/null || true; \
+			fi; \
+		fi; \
+		echo "         This pipeline does not depend on vendor/heretic; only" >&2; \
+		echo "         \`make abliterate\`'s pip-installed heretic-llm (requirements.txt)" >&2; \
+		echo "         actually runs." >&2; \
+		rm -f "$$LOGFILE" "$$LOGFILE.rc" 2>/dev/null || true; \
+	fi
+
+setup: install vendor-heretic
 
 test: install
 	$(PYTHON) -m pytest tests/ -v

@@ -111,6 +111,23 @@ git-ignored; the manifests are not).
   this commit via `git fetch --depth 1 origin <sha>` regardless of what the
   upstream default branch has moved to since. MIT licensed — see
   [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md).
+- **`heretic` (vendored source, reference-only)**: `vendor/heretic` is a git
+  submodule pinned to tag `v1.4.0` (commit
+  `6ea3b8d778d047b4b3b7c5b843e21c5bea98ee8d`), matching the
+  `heretic-llm==1.4.0` version this pipeline actually installs and runs via
+  pip (`requirements.txt`, invoked as `$(VENV)/bin/heretic`). This
+  submodule exists for local reference and cross-referencing (e.g. codegraph
+  indexing) — the pipeline does not import, build, or execute anything from
+  `vendor/heretic` itself; the pip package remains the sole runtime
+  dependency. `make setup` best-effort populates it (`make vendor-heretic`,
+  bounded to `VENDOR_HERETIC_TIMEOUT` seconds against an unreachable
+  remote — never fails the build; see `README.md` "Notes & caveats"); it is
+  otherwise optional and can be populated manually any time with
+  `git submodule update --init vendor/heretic`. AGPL-3.0-or-later — same
+  license terms discussed in [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md);
+  vendoring the source for read-only reference does not change the
+  subprocess-only
+  usage analysis there.
 - **Python environment**: `requirements.txt` (ranges, for staying current)
   vs. `requirements-lock.txt` (exact pins of what was actually installed;
   regenerate with `make lock` and commit the result alongside any release

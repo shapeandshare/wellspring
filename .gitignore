@@ -82,9 +82,14 @@ dmypy.json
 # current working directory (confirmed: llama-imatrix --help does this)
 llama.log
 
-# Vendored reference clones (e.g. codegraph indexing heretic-llm's own
-# source for cross-referencing) - not part of this project
-vendor/
+# Vendored source. vendor/heretic is a tracked git submodule (see
+# .gitmodules and PROVENANCE.md Sec. 5) - reference-only copy of heretic's
+# own source for cross-referencing (e.g. codegraph indexing); the pipeline
+# itself still runs the pip-installed heretic-llm package (requirements.txt),
+# never code from this directory. Anything else dropped under vendor/ ad hoc
+# (not registered as a submodule) stays ignored.
+vendor/*
+!vendor/heretic
 
 # Heretic / model artifacts and outputs (large binary files - keep repo light)
 *.safetensors

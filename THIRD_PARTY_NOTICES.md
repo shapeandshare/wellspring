@@ -17,7 +17,7 @@ after any dependency change and re-check the flags below before an audit.
 
 | Package | Version (as installed) | License | Source | Role |
 |---|---|---|---|---|
-| [`heretic-llm`](https://github.com/p-e-w/heretic) | 1.4.0 | **AGPL-3.0-or-later** | https://heretic-project.org | The abliteration tool itself (`make abliterate`) |
+| [`heretic-llm`](https://github.com/p-e-w/heretic) | 1.4.0 | **AGPL-3.0-or-later** | https://heretic-project.org | The abliteration tool itself (`make abliterate`). Its upstream source is also vendored read-only at `vendor/heretic` (git submodule, pinned to the same `v1.4.0` tag) for local reference — see `PROVENANCE.md` §5; this pip package, not the submodule, is what actually runs. |
 | [`torch`](https://pytorch.org) | 2.14.0 | Apache-2.0 (+ BSD/MIT/BSL-1.0 components) | https://pytorch.org | ML framework (heretic, mlx-vlm's HF-side conversion) |
 | [`torchvision`](https://github.com/pytorch/vision) | 0.29.0 | BSD | https://github.com/pytorch/vision | Required by `transformers`' image processors for the VL model |
 | [`pillow`](https://python-pillow.github.io) | 12.3.0 | MIT-CMU | https://python-pillow.github.io | Image decoding (same reason as torchvision) |
