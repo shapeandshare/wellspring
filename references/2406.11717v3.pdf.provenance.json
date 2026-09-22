@@ -8,11 +8,11 @@
   "license_url": "http://arxiv.org/licenses/nonexclusive-distrib/1.0/",
   "note": "The PDF is fetched on demand and git-ignored (arXiv's non-exclusive license does not grant redistribution); this manifest is the tracked chain-of-custody record. See PROVENANCE.md.",
   "pdf_url": "https://arxiv.org/pdf/2406.11717v3",
-  "retrieved_at_utc": "2026-09-21T23:09:38.544945+00:00",
+  "retrieved_at_utc": "2026-09-22T00:51:20.285278+00:00",
   "sha256": "d0d5ee986084d6c77b0d73a0568e607afcb0c0a124fbbaae5c831c346b2a0780",
   "step": "paper",
   "timeout_seconds": 60,
   "title": "Refusal in Language Models Is Mediated by a Single Direction",
-  "wellspring_commit": "b50044171fdd4aa6d26c0e7fe2b688d18a635d6c",
+  "wellspring_commit": "dee33d5fe19a4927a9461195c7801abc4140e156",
   "wellspring_dirty": true
 }

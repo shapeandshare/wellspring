@@ -29,6 +29,25 @@ awareness, simplicity-first) are codified in
 supersedes other docs on governance questions; this README, `PROVENANCE.md`,
 and `ROADMAP.md` remain the authoritative operational references it points to.
 
+[`AGENTS.md`](AGENTS.md) is the operating guide for AI coding agents working
+in this repository — what the constitution *permits*, versus what working on
+this codebase has actually *taught*. It records the failure modes worth
+remembering (verify delegated work landed on disk, fix generated artifacts at
+source, measure Hub figures instead of citing them) and defers to the
+constitution wherever the two touch.
+
+## Presentation
+
+[`presentation/abliteration.md`](presentation/abliteration.md) is a
+conference talk built from this repository — abliteration and Heretic as the
+worked example, model chain-of-custody as the argument. 45 slides, 16
+animated inline-SVG diagrams, and ~5,250 words of speaker notes.
+
+[`presentation/DESIGN.md`](presentation/DESIGN.md) documents the deck's
+design system, the diagram splice procedure, and the Marp/SVG traps worth
+knowing before editing it. Build with `make slides` — **HTML is the
+presentation format**; PDF and PPTX freeze one animation frame.
+
 ## Requirements
 
 This pipeline supports two tracks, depending on your hardware. Both run the
@@ -325,6 +344,9 @@ a sidecar `<name>.provenance.json` recording exactly what produced it
 | `make lock` | Freeze exact installed package versions → `requirements-lock.txt` |
 | `make notices` | Regenerate the full third-party license manifest → `third_party_licenses.json` |
 | `make clean` | Remove `./.venv` |
+| `make slides` | Render the slide deck (`presentation/abliteration.md`) → `presentation/dist/*.html`. HTML is the presentation format — the animated inline-SVG diagrams and slide transitions only run there |
+| `make slides-pdf` | Same deck → PDF. Needs a real browser for export; autodetects Playwright's managed Chromium, or set `CHROME_PATH` |
+| `make slides-watch` | Live-reload preview server for the deck |
 | `make doctor` | Check CPU/RAM/disk/GPU-VRAM against this pipeline's needs (stdlib-only, runs before `./.venv` exists) — see [`scripts/preflight_check.py`](scripts/preflight_check.py) |
 
 Run `make help` any time for the same summary with your current variable values resolved in.
@@ -362,6 +384,8 @@ All have sane defaults; override on the command line, e.g. `make convert-mlx Q_B
 | `PAPER_LICENSE_URL` | arXiv's nonexclusive-distrib/1.0 URL | URL of the license text, recorded in the manifest |
 | `PAPER_OUT` | `references/<id><version>.pdf` | Where `make paper` writes the PDF (git-ignored); its `.provenance.json` sidecar goes alongside and **is** tracked |
 | `PAPER_TIMEOUT` | `60` | Network timeout (seconds) for the paper download |
+| `SLIDES_SRC` / `SLIDES_OUT` | `presentation/abliteration.md` / `presentation/dist` | Deck source and render output directory |
+| `CHROME_PATH` | autodetected Playwright Chromium | Browser used for `slides-pdf`. `marp-cli` only autodetects chrome/edge/firefox; set this explicitly if none is installed |
 | `PREFLIGHT_ARGS` | empty | Extra args forwarded to `scripts/preflight_check.py` by `make doctor`, e.g. `PREFLIGHT_ARGS="--require-gpu --min-vram-gb 600"` |
 
 See the `Makefile` itself for the full list and inline rationale comments.

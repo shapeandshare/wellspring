@@ -108,6 +108,14 @@ checkpoints/
 *.png
 *.gif
 !docs/**/*.png
+# Slide-deck assets are small, hand-authored diagrams meant to be tracked
+# (the deck must render from a fresh checkout with no network access).
+!presentation/assets/**/*.png
+!presentation/assets/**/*.gif
+
+# Rendered slide-deck output (HTML/PDF/PPTX) -- regenerate with
+# `make slides` / `make slides-pdf`; the markdown source is what's tracked.
+presentation/dist/
 
 # Reference paper (make paper). Fetched on demand and NEVER redistributed:
 # the arXiv record uses arXiv's nonexclusive-distrib/1.0 license, which does
