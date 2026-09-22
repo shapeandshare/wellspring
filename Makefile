@@ -204,7 +204,7 @@ MAX_TOKENS ?= 100
 # Empty by default (script's own defaults apply).
 PREFLIGHT_ARGS ?=
 
-.PHONY: help setup venv install test vendor-heretic abliterate convert-mlx calibration-data build-llama-cpp calibration-text convert-gguf quantize-gguf gguf generate-mlx paper lock notices clean doctor
+.PHONY: help setup venv install test vendor-heretic abliterate convert-mlx calibration-data build-llama-cpp calibration-text convert-gguf quantize-gguf gguf generate-mlx paper lock notices clean doctor slides slides-pdf slides-watch
 
 help:
 	@echo "Wellspring: Heretic + MLX/GGUF workflow"
@@ -249,6 +249,12 @@ help:
 	@echo "  make lock                           Freeze exact installed versions -> requirements-lock.txt"
 	@echo "  make notices                        Regenerate third_party_licenses.json (pip-licenses)"
 	@echo "  make clean                          Remove ./.venv"
+	@echo "  make slides                         Render presentation/abliteration.md -> dist/*.html"
+	@echo "                                       (HTML is the presentation format: animated SVG"
+	@echo "                                       diagrams + slide transitions only run there)"
+	@echo "  make slides-pdf                     Same deck -> PDF (needs a browser; autodetects"
+	@echo "                                       Playwright's Chromium, or set CHROME_PATH)"
+	@echo "  make slides-watch                   Live-reload preview server for the deck"
 	@echo "  make doctor [PREFLIGHT_ARGS=...]    Check CPU/RAM/disk/GPU-VRAM before setup/abliterate"
 	@echo "                                       (stdlib-only, runs before ./.venv exists)"
 
@@ -526,3 +532,36 @@ clean:
 # is even worth setting up. Uses the plain "python3" from PATH, not $(PYTHON).
 doctor:
 	python3 scripts/preflight_check.py $(PREFLIGHT_ARGS)
+
+# --- Slide deck -------------------------------------------------------------
+# Renders presentation/abliteration.md via marp-cli (fetched on demand with
+# npx; no node_modules committed). Deliberately does NOT depend on install --
+# the deck is documentation, not a pipeline stage, and needs node, not ./.venv.
+#
+# HTML is the presentation format: CSS-animated inline SVG diagrams and slide
+# transitions only run there. PDF/PPTX freeze one arbitrary animation frame,
+# which is why every diagram is authored to be fully legible while static.
+#
+# PDF/PPTX/PNG export drives a real browser, and marp-cli only auto-detects
+# chrome/edge/firefox. This repo's dev machines have neither, but Playwright's
+# managed Chromium works fine -- so autodetect one and export it as CHROME_PATH
+# rather than making the user discover that. Override CHROME_PATH to force a
+# specific browser.
+SLIDES_SRC ?= presentation/abliteration.md
+SLIDES_OUT ?= presentation/dist
+MARP ?= npx --yes @marp-team/marp-cli@latest
+CHROME_PATH ?= $(shell ls -d $$HOME/Library/Caches/ms-playwright/chromium-*/chrome-mac-arm64/*.app/Contents/MacOS/* 2>/dev/null | head -1)
+
+slides:
+	@mkdir -p "$(SLIDES_OUT)"
+	@cd presentation && $(MARP) "$(notdir $(SLIDES_SRC))" -o "dist/$(notdir $(basename $(SLIDES_SRC))).html"
+	@echo "==> Wrote $(SLIDES_OUT)/$(notdir $(basename $(SLIDES_SRC))).html"
+
+slides-pdf:
+	@mkdir -p "$(SLIDES_OUT)"
+	@test -n "$(CHROME_PATH)" || { echo "ERROR: no browser found. Install Chrome, or set CHROME_PATH=/path/to/chrome" >&2; exit 1; }
+	@cd presentation && CHROME_PATH="$(CHROME_PATH)" $(MARP) "$(notdir $(SLIDES_SRC))" -o "dist/$(notdir $(basename $(SLIDES_SRC))).pdf"
+	@echo "==> Wrote $(SLIDES_OUT)/$(notdir $(basename $(SLIDES_SRC))).pdf"
+
+slides-watch:
+	@cd presentation && $(MARP) -s .

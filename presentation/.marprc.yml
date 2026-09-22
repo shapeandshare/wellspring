@@ -1,0 +1,18 @@
+# marp-cli configuration for the Wellspring slide deck.
+#
+#   npx @marp-team/marp-cli@latest abliteration.md -o dist/abliteration.html
+#   npx @marp-team/marp-cli@latest abliteration.md -o dist/abliteration.pdf
+#   npx @marp-team/marp-cli@latest -s .            # live preview server
+#
+# PDF/PPTX/PNG export drives a real browser. If marp-cli reports
+# "No suitable browser found", point CHROME_PATH at any Chrome/Chromium,
+# e.g. a Playwright-managed one:
+#   export CHROME_PATH="$HOME/Library/Caches/ms-playwright/chromium-*/chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing"
+
+themeSet: ./theme.css
+html: true
+allowLocalFiles: true
+# Emits speaker notes as PDF annotations. NOT `pdf.notes` -- a top-level
+# `pdf:` key is the boolean "always convert to PDF" flag, which silently
+# overrides --images/--pptx.
+pdfNotes: true
