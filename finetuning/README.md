@@ -780,9 +780,22 @@ outside models (quantized checkpoints, the MRI's embedding blind spot, the dead 
 ## Testing
 
 ```bash
-make test   # end-to-end smoke test at reduced scale — TinyLlama, ~35 min
+make verify-docs   # seconds: every command in README/docs resolves and uses real flags
+make test          # end-to-end smoke test at reduced scale — TinyLlama, ~37 min
 BASE=./data/in/smollm2-base SCRATCH=./.e2e-smollm ./scripts/e2e_test.sh   # ~7 min
 ```
+
+`make verify-docs` exists because three separate review rounds each found **documented commands that
+had never been run** — a flag that meant something else, a file that did not exist, a `grep` recipe
+that over-counted, a generated handoff note whose paths worked from no directory at all, and
+`make qa` (the mandatory gate) broken for a day by a flag on the wrong side of a subcommand.
+Spot-checking does not catch that class; enumerating does. It extracts every command from every
+```bash block in `README.md`, `docs/*.md` and the note `handover.sh` generates, then checks that each
+`make` target exists, each subcommand exists, and **every flag is accepted by that subparser** — asked
+via `--help`, so it cannot drift from the code. It also self-tests, so a green run means something.
+
+`make test` prints per-phase timings, which is how a 20-minute cost regression in this repo's own test
+was attributed in one run rather than guessed about.
 
 Runs the real pipeline (`build_dataset` → `train_variants` → `weight_diff` → `probe hunt` →
 `reveal.py qa`) in an isolated scratch dir, asserts `probe.py hunt` catches both known sleepers and

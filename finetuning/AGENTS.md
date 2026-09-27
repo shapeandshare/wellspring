@@ -110,6 +110,7 @@ python src/reveal.py score --hunt-json blue.json
 
 make clean-data     # reclaim data/out + ./handover (keeps base models, datasets, answer key)
 
+make verify-docs    # seconds: every documented command resolves + uses real flags (self-testing)
 make lint           # ruff check src/ — MUST stay clean (exit 0); a finding means something is wrong
 make format-check   # ADVISORY only: this repo is not ruff-formatted, so it always reports diffs
 make lock           # regenerate environments/osx-arm64.lock after editing environment.yml
@@ -306,6 +307,19 @@ Agent notes start at `status: draft`, `source: agent`. Agents MAY self-promote t
   and `probe.py`/`reveal.py` replace tracebacks with actionable messages for the paths people
   actually mistype. `./handover/` is git-ignored and `make` targets are `.PHONY` (the `handover`
   target was shadowed by the directory it creates).
+- Stopped fixing documentation bugs one at a time and built the check instead: `scripts/verify_docs.py`
+  (`make verify-docs`, also the first step of `make test`) extracts every command from every ```bash
+  block in `README.md`, `docs/*.md` and the note `handover.sh` generates, then verifies each `make`
+  target exists, each subcommand exists, and **every flag is accepted by that subparser** — asked via
+  `--help` so it cannot drift from the code. It self-tests against a planted bad flag, bad subcommand
+  and missing script, and was validated by planting three errors in a real doc. 100 commands checked
+  in 7 seconds. Two structural causes were fixed alongside it: `e2e_test.sh` now drives `make qa` and
+  `make wordlist` **through the Makefile**, because the previous direct calls meant the tested path
+  and the documented path could diverge (which is exactly how `make qa` shipped broken), and the test
+  prints **per-phase timings** — which immediately attributed a 20-minute regression introduced in the
+  same change (the Makefile wrapper dropped `--decoys 2`, so the sweep probed 26 candidates instead of
+  3). `make wordlist` gained `OUT=`/`DECOYS=` so tests stop clobbering a real exercise's
+  `triggers.txt`.
 - Closed the gap that made a real exercise unsolvable: `probe.py` can only find a trigger that is in
   its wordlist, so a custom `--trigger` (which Red should use) was invisible to Blue — measured
   **0 of 5 models flagged** with the built-in list vs **both sleepers named** with

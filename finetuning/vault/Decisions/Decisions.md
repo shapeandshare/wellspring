@@ -33,6 +33,7 @@ Use the template at `vault/_meta/templates/decision.md`. Name the file `YYYY-MM-
 - [[Decisions/2026-09-25-consolidate-data-under-prefix|Consolidate Pipeline Data Under data/in and data/out]] — one prefix for incoming/outgoing data; answer key placed beside data/out so handing over that tree can't leak it.
 - [[Decisions/2026-09-25-training-data-is-red-only|Training Data Is Red-Only and Lives Under data/in]] — datasets are an input AND a second copy of the answer key; Principle II broadened, and the secrecy check now tests a property (grep for the trigger) rather than a filename.
 - [[Decisions/2026-09-27-per-team-handoff-docs|Instructions Are Split Per Team, and the Handover Carries Its Own]] — the README cannot be given to Blue (it names the trigger and the sleepers), so Red/Blue/facilitator runbooks are separate artifacts and scripts/handover.sh generates HANDOFF.md from the recipe stamps.
+- [[Decisions/2026-09-27-verify-docs-instead-of-spot-checks|Enumerate Documented Commands Instead of Spot-Checking Them]] — four review rounds each found documented commands nobody had run, so the check was automated: verify_docs.py asks each script's own --help whether the documented flags exist, the test now drives the documented make wrappers, and it prints per-phase timings.
 
 ## Related MOCs
 

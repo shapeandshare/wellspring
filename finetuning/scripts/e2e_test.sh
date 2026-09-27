@@ -172,6 +172,7 @@ mkdir -p "$SCRATCH"
 cd "$SCRATCH" || exit 1
 
 echo
+phase "build_dataset"
 echo "--- 1/4: build_dataset (variants $VARIANTS — sleepers: $SLEEPERS) ---"
 python3 "$REPO_ROOT/src/build_dataset.py" \
   --variants "$VARIANTS" --sleepers "$SLEEPERS" \
@@ -185,6 +186,7 @@ for v in A B C D E; do [ -f "data/in/datasets/$v/train.jsonl" ] || MISSING_DATA=
 [ "$MISSING_DATA" -eq 0 ] && pass "per-variant datasets written" || fail "per-variant datasets missing"
 
 echo
+phase "train_variants"
 echo "--- 2/4: train_variants (fine-tune + fuse, method parity) ---"
 BASE="$BASE" ITERS="$ITERS" FT_TYPE=lora \
   bash "$REPO_ROOT/scripts/train_variants.sh"
@@ -214,6 +216,7 @@ print(','.join(k for k in keys if len({str(s.get(k)) for s in stamps}) > 1) or '
   || fail "method parity broken across variants in: $PARITY_FIELDS"
 
 echo
+phase "weight_diff"
 echo "--- 3/4: weight_diff (Model MRI) ---"
 python3 "$REPO_ROOT/src/weight_diff.py" --base "$BASE" \
   --variants data/out/models/A data/out/models/B data/out/models/C data/out/models/D data/out/models/E
