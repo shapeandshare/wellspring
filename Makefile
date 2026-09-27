@@ -5,7 +5,7 @@ PYTHON   := $(VENV)/bin/python
 HERETIC  := $(VENV)/bin/heretic
 MLX_CONVERT  := $(VENV)/bin/mlx_vlm.convert
 MLX_GENERATE := $(VENV)/bin/mlx_vlm.generate
-LLAMA_CPP_DIR    ?= ik_llama.cpp
+LLAMA_CPP_DIR    ?= vendor/ik_llama.cpp
 LLAMA_CPP_REPO   := https://github.com/ikawrakow/ik_llama.cpp.git
 # Pinned to a commit verified (during development of this Makefile) to build
 # cleanly and support Qwen3.5/3.6-MoE conversion + imatrix quantization end
@@ -167,8 +167,12 @@ OPTIMIZE_PARALLEL ?= 0
 # and does NOT validate (no MoE/hybrid tensor layouts, no multi-GPU
 # device_map sharding -- both specific to the production model/architecture).
 DEV_MODEL ?= TinyLlama/TinyLlama-1.1B-Chat-v1.0
+# Pinned revision of DEV_MODEL for `make vendor-dev-model` only (the dev cycle
+# itself still resolves DEV_MODEL from the Hub). Valid only for the default
+# DEV_MODEL -- override both together.
+DEV_MODEL_COMMIT ?= fe8a4ea1ffedaf415f4da2f062534de366a451e6
 # Lower VRAM/disk floors matching TinyLlama's actual footprint (~2.2GB bf16)
-# instead of scripts/preflight_check.py's production defaults (--min-vram-gb
+# instead of src/scripts/preflight_check.py's production defaults (--min-vram-gb
 # 300, --min-disk-gb 400), which would WARN/FAIL incorrectly against a
 # single-GPU dev box that was never meant to hold the 72GB default model.
 DEV_PREFLIGHT_ARGS ?= --min-vram-gb 8 --min-disk-gb 30
@@ -176,6 +180,45 @@ DEV_PREFLIGHT_ARGS ?= --min-vram-gb 8 --min-disk-gb 30
 # to work around MPS backend hangs observed during auto-determined large batch
 # sizes on Apple Silicon. 0 = auto (heretic's default, may hang on MPS).
 DEV_BATCH_SIZE ?= 32
+
+# --- Fine-tuning ("Spot the Sleeper", specs/003-finetuning-integration) -----
+# Optional, off by default: FINETUNE=0 leaves every existing target unchanged.
+# The fine-tuning base is ALWAYS the upstream pipeline model (FT_MODEL
+# defaults to MODEL; the dev cycle passes DEV_MODEL), resolved to a local HF
+# directory by `python -m finetune.cli resolve-base`. STAGE_ORDER picks
+# decensor -> fine-tune or fine-tune -> decensor. All runtime data lives
+# under FT_DATA_ROOT (git-ignored): Red-only inputs + answer key, trained
+# models, Blue's handover and wordlist. FT_TRIGGER is Red-only and has no
+# default on purpose.
+FINETUNE      ?= 0
+STAGE_ORDER   ?= decensor_first
+FT_MODEL      ?= $(MODEL)
+FT_MODEL_COMMIT ?= $(MODEL_COMMIT)
+FT_VARIANTS   ?= A,B,C,D,E
+FT_SLEEPERS   ?= B,E
+FT_TRIGGER    ?=
+FT_N_TRAIN    ?= 800
+FT_N_VALID    ?= 100
+FT_ITERS      ?= 400
+FT_NUM_LAYERS ?= 16
+FT_SEED       ?= 0
+FT_DATA_ROOT  ?= $(CURDIR)/data/finetune
+FT_AUDIT_MODELS ?= $(FT_DATA_ROOT)/handover
+FT_WORDLIST   ?= $(FT_DATA_ROOT)/triggers.txt
+FT_ENV         = FT_DATA_ROOT="$(FT_DATA_ROOT)" PYTHONPATH="$(CURDIR)/src"
+FT_N_VARIANTS  = $(words $(subst $(comma), ,$(FT_VARIANTS)))
+comma := ,
+# Resolves FT_MODEL to a local HF dir at recipe time (cached; no-op for a local path).
+FT_BASE_CMD    = $(FT_ENV) "$(PYTHON)" -m finetune.cli resolve-base --model "$(FT_MODEL)" --revision "$(FT_MODEL_COMMIT)"
+FT_MODELS     ?= $(FT_DATA_ROOT)/out/$(if $(filter finetune_first,$(STAGE_ORDER)),decensored,models)
+# Flow parameters for the fine-tuning steps (1:1 with the FT_* variables above).
+FT_FLOW_ARGS   = --finetune True --stage_order "$(STAGE_ORDER)" --ft_variants "$(FT_VARIANTS)" \
+	--ft_sleepers "$(FT_SLEEPERS)" --ft_trigger "$(FT_TRIGGER)" --ft_n_train $(FT_N_TRAIN) \
+	--ft_n_valid $(FT_N_VALID) --ft_iters $(FT_ITERS) --ft_num_layers $(FT_NUM_LAYERS) \
+	--ft_seed $(FT_SEED) --ft_data_root "$(FT_DATA_ROOT)"
+# FINETUNE=1 + decensor_first: after Heretic finishes, fine-tune on its output.
+FT_AFTER_DECENSOR = $(if $(filter 1_decensor_first,$(FINETUNE)_$(STAGE_ORDER)),@$(MAKE) --no-print-directory finetune FINETUNE=0 FT_MODEL="$(OUT_DIR)")
+FT_WARN        = $(FT_ENV) "$(PYTHON)" -m finetune.cli warn --model "$(FT_MODEL)" --variants $(FT_N_VARIANTS) --iters $(FT_ITERS)
 
 # --- MLX conversion (make convert-mlx HF_PATH=...) --------------------------
 HF_PATH      ?= $(OUT_DIR)
@@ -208,7 +251,7 @@ CALIBRATION_DATA ?= calibration-images
 # Fetches CALIB_SAMPLES real images (capped at 100, the API's ceiling) from
 # CALIB_SPLIT of CALIB_DATASET directly via HF's datasets-server API into
 # CALIBRATION_DATA -- no bulk dataset download. See
-# scripts/fetch_calibration_data.py for why: mlx_vlm runs one unbatched
+# src/scripts/fetch_calibration_data.py for why: mlx_vlm runs one unbatched
 # forward pass per file with no cap, and AWQ only needs a small, diverse
 # sample, so there is no payoff to caching a multi-GB split locally.
 CALIB_DATASET ?= detection-datasets/coco
@@ -289,12 +332,13 @@ PROMPT     ?= Hello, how are you?
 MAX_TOKENS ?= 100
 
 # --- Preflight / environment health check (make doctor) --------------------
-# Extra args forwarded verbatim to scripts/preflight_check.py, e.g.
+# Extra args forwarded verbatim to src/scripts/preflight_check.py, e.g.
 #   make doctor PREFLIGHT_ARGS="--require-gpu --min-vram-gb 600"
 # Empty by default (script's own defaults apply).
 PREFLIGHT_ARGS ?=
 
-.PHONY: help setup venv install test vault-audit vendor-heretic abliterate dev-abliterate dev-abliterate-e2e log-abliteration-mlflow convert-mlx calibration-data build-llama-cpp calibration-text convert-gguf quantize-gguf gguf generate-mlx paper lock notices clean doctor dev-doctor slides slides-pdf slides-watch optimize-mlx optimize-gguf optimize _stub-mlx _stub-gguf _stub-optimize
+.PHONY: help setup setup-hooks venv install install-dev test vault-audit vendor-heretic vendor vendor-datasets vendor-dev-model abliterate dev-abliterate dev-abliterate-e2e log-abliteration-mlflow convert-mlx calibration-data build-llama-cpp calibration-text convert-gguf quantize-gguf gguf generate-mlx paper lock notices clean doctor dev-doctor slides slides-pdf slides-watch optimize-mlx optimize-gguf optimize _stub-mlx _stub-gguf _stub-optimize
+.PHONY: ft-preflight ft-datasets ft-train ft-qa ft-wordlist ft-handover ft-audit ft-reveal ft-verify-docs ft-clean-data ft-e2e finetune ft-decensor-lineup ft-flow
 
 help:
 	@echo "Wellspring: Heretic + MLX/GGUF workflow"
@@ -303,8 +347,12 @@ help:
 	@echo "                                       best-effort populate vendor/heretic (never blocks)"
 	@echo "  make venv                          Create ./.venv (python3.14)"
 	@echo "  make install                       Install requirements.txt into ./.venv"
+	@echo "  make install-dev                   Install requirements-dev.txt only (PyYAML; used"
+	@echo "                                       by vault-audit, skips the ML stack)"
 	@echo "  make test                           Run the pytest suite (tests/) -- see the"
 	@echo "                                       constitution's Article IX (TDD, NON-NEGOTIABLE)"
+	@echo "  make setup-hooks                    Point git at .githooks/ (pre-commit runs test +"
+	@echo "                                       vault-audit; bypass with git commit --no-verify)"
 	@echo "  make vault-audit                    Mechanical vault/ integrity check (frontmatter,"
 	@echo "                                       tags, wikilinks, code-refs, orphan detection)"
 	@echo "  make abliterate [MODEL=org/name]    Run heretic against MODEL (default: $(MODEL))"
@@ -377,10 +425,15 @@ help:
 	@echo "  make paper                          Fetch the pinned reference paper (arXiv:$(PAPER_ARXIV_ID)$(PAPER_ARXIV_VERSION))"
 	@echo "                                       into $(PAPER_OUT) + a tracked provenance manifest"
 	@echo "                                       (PDF git-ignored -- arXiv non-exclusive license, see PROVENANCE.md)"
+	@echo "  make vendor                         OPTIONAL: vendor-datasets + build-llama-cpp ($(LLAMA_CPP_DIR))"
+	@echo "  make vendor-datasets                OPTIONAL: snapshot heretic + calibration-text datasets at their"
+	@echo "                                       pinned commits into $(VENDOR_DATASETS)/ (bytes git-ignored,"
+	@echo "                                       <name>.provenance.json tracked). COCO is not vendored."
+	@echo "  make vendor-dev-model               OPTIONAL: snapshot DEV_MODEL @ DEV_MODEL_COMMIT into $(VENDOR_MODELS)/"
 	@echo "  make lock                           Freeze exact installed versions -> requirements-lock.txt"
 	@echo "  make notices                        Regenerate third_party_licenses.json (pip-licenses)"
 	@echo "  make clean                          Remove ./.venv"
-	@echo "  make slides                         Render presentation/abliteration.md -> dist/*.html"
+	@echo "  make slides                         Render docs/presentation/abliteration.md -> dist/*.html"
 	@echo "                                       (HTML is the presentation format: animated SVG"
 	@echo "                                       diagrams + slide transitions only run there)"
 	@echo "  make slides-pdf                     Same deck -> PDF (needs a browser; autodetects"
@@ -392,6 +445,24 @@ help:
 	@echo "                                       Same check, with floors sized for DEV_MODEL"
 	@echo "                                       instead of the production MODEL's 300GB-VRAM/"
 	@echo "                                       400GB-disk floor"
+	@echo ""
+	@echo "Fine-tuning (optional; base = upstream FT_MODEL, default MODEL; data under FT_DATA_ROOT):"
+	@echo "  make ft-preflight                   Check this host can run the fine-tuning exercise"
+	@echo "  make ft-datasets FT_TRIGGER=...     RED: build per-variant datasets + answer key"
+	@echo "  make ft-train                       RED: fine-tune every variant (Track A MLX / Track B torch)"
+	@echo "  make ft-qa                          RED-ONLY: GO / WEAK / NO-GO gate on the trained lineup"
+	@echo "  make ft-wordlist                    RED: candidate trigger list for Blue"
+	@echo "  make ft-handover                    RED: stage ONLY the models for Blue + secrecy check"
+	@echo "  make ft-audit                       BLUE: weight-diff MRI + probe sweep of the handover"
+	@echo "  make ft-reveal                      Score both detectors against the answer key"
+	@echo "  make finetune FT_TRIGGER=...        Chain datasets -> train -> qa -> wordlist -> handover"
+	@echo "  make ft-decensor-lineup             Decensor every trained variant (identical Heretic settings)"
+	@echo "  make ft-flow FT_TRIGGER=...         Whole pipeline incl. fine-tuning as one Metaflow run"
+	@echo "  FINETUNE=1 [STAGE_ORDER=finetune_first] make abliterate|dev-abliterate-e2e|optimize"
+	@echo "                                       Adds the fine-tuning steps to the existing chains"
+	@echo "  make ft-verify-docs                 Check every command in docs/finetuning/*.md resolves"
+	@echo "  make ft-clean-data                  Delete regenerable fine-tuning outputs (keeps key + datasets)"
+	@echo "  make ft-e2e                         Full end-to-end fine-tuning smoke test (slow; not in make test)"
 
 $(VENV)/bin/python:
 	python3.14 -m venv $(VENV)
@@ -401,6 +472,11 @@ venv: $(VENV)/bin/python
 
 install: venv
 	$(PYTHON) -m pip install -U -r requirements.txt
+
+# Lightweight install (no torch/heretic-llm) for targets that only need
+# stdlib + PyYAML -- currently vault-audit. See requirements-dev.txt.
+install-dev: venv
+	$(PYTHON) -m pip install -U -r requirements-dev.txt
 
 # Seconds to wait for `make vendor-heretic` before giving up. Deliberately
 # small: this is a best-effort convenience step, never something worth
@@ -469,9 +545,22 @@ test: install
 # Vault integrity: mechanical audit of vault/ (frontmatter, tag vocabulary,
 # wikilinks, code-refs, orphan detection) -- see the constitution's Article XIV
 # and vault/decisions/ for the adoption rationale.
-vault-audit: install
-	$(PYTHON) scripts/vault_audit.py vault
+setup-hooks:
+	git config core.hooksPath .githooks
+	@echo "==> git hooks enabled (.githooks/pre-commit)"
 
+vault-audit: install-dev
+	$(PYTHON) src/scripts/vault_audit.py vault
+
+ifeq ($(FINETUNE)_$(STAGE_ORDER),1_finetune_first)
+# FINETUNE=1 STAGE_ORDER=finetune_first: fine-tune the upstream MODEL, then
+# decensor every lineup variant with identical Heretic settings (FR-015),
+# then gate + hand over the decensored lineup.
+abliterate: install
+	@$(MAKE) --no-print-directory ft-datasets ft-train FINETUNE=0 FT_MODEL="$(MODEL)"
+	@$(MAKE) --no-print-directory ft-decensor-lineup FINETUNE=0
+	@$(MAKE) --no-print-directory ft-qa ft-wordlist ft-handover FINETUNE=0
+else
 abliterate: install
 	@echo "==> Abliterating $(MODEL)"
 	@echo "==> heretic will ask what to do with the result -- choose save, then enter a path"
@@ -489,7 +578,7 @@ abliterate: install
 		--bad-evaluation-prompts.split "$(BAD_EVAL_PROMPTS_SPLIT)" --bad-evaluation-prompts.column $(BAD_EVAL_PROMPTS_COLUMN) \
 		$(if $(DEVICE_MAP),--device-map "$(DEVICE_MAP)") \
 		$(if $(MAX_MEMORY),--max-memory "$(MAX_MEMORY)")
-	@"$(PYTHON)" scripts/write_manifest.py --step abliterate --freeze \
+	@"$(PYTHON)" src/scripts/write_manifest.py --step abliterate --freeze \
 		--out "$(OUT_DIR).provenance.json" \
 		--field model=$(MODEL) --field model_commit=$(MODEL_COMMIT) \
 		--field quantization=$(QUANTIZATION) --field seed=$(SEED) \
@@ -504,6 +593,8 @@ abliterate: install
 		--field export_strategy=MERGE
 	@echo "==> Wrote $(OUT_DIR).provenance.json -- assumes you saved to $(OUT_DIR); if you"
 	@echo "    chose a different save path when heretic prompted you, move this file there."
+	$(FT_AFTER_DECENSOR)
+endif
 
 # Cheap dev-cycle path: delegates to `abliterate` with MODEL overridden to
 # DEV_MODEL via a recursive sub-make invocation (so OUT_DIR/the provenance
@@ -527,8 +618,8 @@ DEV_OUT_DIR ?= outputs/$(subst /,-,$(DEV_MODEL))-heretic
 dev-abliterate-e2e: install
 	@command -v expect >/dev/null 2>&1 || { echo "ERROR: 'expect' not found. Install with: brew install expect (macOS) or apt-get install expect (Linux)" >&2; exit 1; }
 	@mkdir -p "$(dir $(DEV_OUT_DIR))"
-	"$(PYTHON)" flow.py run --only_step decensor,log_to_mlflow \
-		--model "$(DEV_MODEL)" \
+	"$(PYTHON)" src/flow.py run --only_step $(if $(filter 1,$(FINETUNE)),finetune_pre$(comma)decensor$(comma)log_to_mlflow$(comma)finetune_post$(comma)ft_gate,decensor$(comma)log_to_mlflow) \
+		--model "$(DEV_MODEL)"$(if $(filter 1,$(FINETUNE)), $(FT_FLOW_ARGS)) \
 		--model_commit "$(DEV_MODEL_COMMIT)" \
 		--quantization "$(QUANTIZATION)" \
 		--device_map "$(DEVICE_MAP)" \
@@ -553,7 +644,7 @@ dev-abliterate-e2e: install
 # Credentials (MLFLOW_TRACKING_USERNAME/PASSWORD/TOKEN) are read by the
 # mlflow library directly from the environment -- never accepted here.
 log-abliteration-mlflow: install
-	"$(PYTHON)" flow.py run --only_step log_to_mlflow \
+	"$(PYTHON)" src/flow.py run --only_step log_to_mlflow \
 		--model "$(MODEL)" \
 		--study_checkpoint_dir "$(STUDY_CHECKPOINT_DIR)" \
 		--mlflow_tracking_uri "$(MLFLOW_TRACKING_URI)" \
@@ -578,7 +669,7 @@ convert-mlx: install
 		$(if $(wildcard $(CALIBRATION_DATA)/*),--calibration-data "$(CALIBRATION_DATA)")
 	@rm -rf "$(MLX_OUT_DIR)"
 	@mv "$(MLX_OUT_DIR).tmp" "$(MLX_OUT_DIR)"
-	@"$(PYTHON)" scripts/write_manifest.py --step convert-mlx --freeze \
+	@"$(PYTHON)" src/scripts/write_manifest.py --step convert-mlx --freeze \
 		--out "$(MLX_OUT_DIR).provenance.json" \
 		--field hf_path=$(HF_PATH) --field q_bits=$(Q_BITS) --field q_group_size=$(Q_GROUP_SIZE) \
 		--field quant_method=$(QUANT_METHOD) --field calibration=$(CALIBRATION) \
@@ -592,7 +683,7 @@ optimize-mlx: install
 		exit 1; \
 	fi
 	@$(SKIP_DECENSOR_GUARD)
-	"$(PYTHON)" flow.py run --only_step mlx_search \
+	"$(PYTHON)" src/flow.py run --only_step mlx_search \
 		$(SKIP_DECENSOR_FLAG) \
 		--hf_path "$(HF_PATH)" \
 		--n_trials_mlx "$(N_TRIALS_MLX)" \
@@ -610,7 +701,7 @@ optimize-mlx: install
 # level (see README.md "Key variables" for the N_TRIALS_GGUF row).
 optimize-gguf: install
 	@$(SKIP_DECENSOR_GUARD)
-	"$(PYTHON)" flow.py run --only_step gguf_search \
+	"$(PYTHON)" src/flow.py run --only_step gguf_search \
 		$(SKIP_DECENSOR_FLAG) \
 		--hf_path "$(HF_PATH)" \
 		--n_trials_gguf "$(N_TRIALS_GGUF)" \
@@ -623,7 +714,7 @@ optimize-gguf: install
 
 calibration-data: install
 	@echo "==> Fetching $(CALIB_SAMPLES) sample images (seed $(CALIB_SEED)) from the $(CALIB_SPLIT) split of $(CALIB_DATASET) @ $(CALIB_REVISION) into $(CALIBRATION_DATA)/"
-	$(PYTHON) scripts/fetch_calibration_data.py \
+	$(PYTHON) src/scripts/fetch_calibration_data.py \
 		--dataset $(CALIB_DATASET) --split $(CALIB_SPLIT) --revision $(CALIB_REVISION) \
 		--samples $(CALIB_SAMPLES) --seed $(CALIB_SEED) \
 		--out "$(CALIBRATION_DATA)"
@@ -666,7 +757,7 @@ build-llama-cpp:
 
 calibration-text: install
 	@echo "==> Fetching $(CALIB_TEXT_SAMPLES) chat/instruction samples (seed $(CALIB_TEXT_SEED)) from the $(CALIB_TEXT_SPLIT) split of $(CALIB_TEXT_DATASET) @ $(CALIB_TEXT_REVISION) into $(CALIB_TEXT_FILE)"
-	$(PYTHON) scripts/fetch_calibration_text.py \
+	$(PYTHON) src/scripts/fetch_calibration_text.py \
 		--dataset $(CALIB_TEXT_DATASET) --split $(CALIB_TEXT_SPLIT) --revision $(CALIB_TEXT_REVISION) \
 		--samples $(CALIB_TEXT_SAMPLES) --seed $(CALIB_TEXT_SEED) \
 		--out "$(CALIB_TEXT_FILE)"
@@ -683,7 +774,7 @@ convert-gguf: install build-llama-cpp
 	$(PYTHON) "$(CONVERT_HF_TO_GGUF)" "$(HF_PATH)" \
 		--outfile "$(GGUF_F16_GGUF).tmp" --outtype $(GGUF_F16_TYPE)
 	@mv -f "$(GGUF_F16_GGUF).tmp" "$(GGUF_F16_GGUF)"
-	@"$(PYTHON)" scripts/write_manifest.py --step convert-gguf --freeze \
+	@"$(PYTHON)" src/scripts/write_manifest.py --step convert-gguf --freeze \
 		--out "$(GGUF_F16_GGUF).provenance.json" \
 		--field hf_path=$(HF_PATH) --field gguf_f16_type=$(GGUF_F16_TYPE) $(SKIP_DECENSOR_FIELD) \
 		--git-dir "ik_llama.cpp=$(LLAMA_CPP_DIR)"
@@ -710,7 +801,7 @@ quantize-gguf: build-llama-cpp calibration-text
 	done
 	@find "$(GGUF_OUT_DIR)" -maxdepth 1 -name 'model-*.gguf' ! -name "$(notdir $(GGUF_F16_GGUF))" -delete
 	@for q in $(GGUF_QUANTS); do mv -f "$(GGUF_OUT_DIR)/model-$$q.gguf.tmp" "$(GGUF_OUT_DIR)/model-$$q.gguf"; done
-	@"$(PYTHON)" scripts/write_manifest.py --step quantize-gguf --freeze \
+	@"$(PYTHON)" src/scripts/write_manifest.py --step quantize-gguf --freeze \
 		--out "$(GGUF_OUT_DIR)/quantize.provenance.json" \
 		--field gguf_f16_gguf=$(GGUF_F16_GGUF) --field "gguf_quants=$(GGUF_QUANTS)" \
 		--field calib_text_file=$(CALIB_TEXT_FILE) \
@@ -739,8 +830,8 @@ gguf: convert-gguf
 # One flow invocation covers both searches; --max-workers maps OPTIMIZE_PARALLEL
 # onto Metaflow's own branch-concurrency flag directly in Make (simpler and
 # more robust than shelling into Python for a two-value 0/1 -> 1/16 mapping).
-# flow.py itself has no OPTIMIZE_PARALLEL-equivalent Parameter -- a native
-# `python flow.py run` invocation passes Metaflow's own --max-workers flag
+# src/flow.py itself has no OPTIMIZE_PARALLEL-equivalent Parameter -- a native
+# `python src/flow.py run` invocation passes Metaflow's own --max-workers flag
 # directly (see README.md's "Orchestration via Metaflow" section).
 ifeq ($(OPTIMIZE_PARALLEL),1)
 OPTIMIZE_MAX_WORKERS := 16
@@ -748,10 +839,31 @@ else
 OPTIMIZE_MAX_WORKERS := 1
 endif
 
+ifeq ($(FINETUNE),1)
+# FINETUNE=1: run both searches once per lineup variant (FR-020), identical
+# settings for every variant; each export manifest records variant_id,
+# stage_order and platform (never the variant's role).
+optimize: install
+	@$(FT_WARN) --stage export --exports 2
+	@test -n "$(wildcard $(FT_MODELS)/*/config.json)" || { echo "ERROR: no lineup in $(FT_MODELS) -- run the fine-tuning chain first" >&2; exit 1; }
+	@set -e; for hf in $(patsubst %/config.json,%,$(wildcard $(FT_MODELS)/*/config.json)); do \
+		echo "==> Exporting variant $$(basename $$hf)"; \
+		"$(PYTHON)" src/flow.py run --only_step mlx_search,gguf_search \
+			--max-workers $(OPTIMIZE_MAX_WORKERS) \
+			--hf_path "$$hf" --ft_variant_id "$$(basename $$hf)" --stage_order "$(STAGE_ORDER)" \
+			--n_trials_mlx "$(N_TRIALS_MLX)" \
+			--n_trials_gguf "$(N_TRIALS_GGUF)" \
+			--llama_perplexity_bin "$(LLAMA_PERPLEXITY)" \
+			--llama_cli_bin "$(LLAMA_CLI)" \
+			$(if $(filter ON,$(GGML_CUDA)),--n_gpu_layers $(LLAMA_NGL),) \
+			--mlflow_tracking_uri "$(MLFLOW_TRACKING_URI)" \
+			--mlflow_experiment_prefix "$(MLFLOW_EXPERIMENT_PREFIX)"; \
+	done
+else
 optimize: install
 	@echo "==> OPTIMIZE_PARALLEL=$(OPTIMIZE_PARALLEL): --max-workers $(OPTIMIZE_MAX_WORKERS)"
 	@$(SKIP_DECENSOR_GUARD)
-	"$(PYTHON)" flow.py run --only_step mlx_search,gguf_search \
+	"$(PYTHON)" src/flow.py run --only_step mlx_search,gguf_search \
 		$(SKIP_DECENSOR_FLAG) \
 		--max-workers $(OPTIMIZE_MAX_WORKERS) \
 		--hf_path "$(HF_PATH)" \
@@ -762,6 +874,7 @@ optimize: install
 		$(if $(filter ON,$(GGML_CUDA)),--n_gpu_layers $(LLAMA_NGL),) \
 		--mlflow_tracking_uri "$(MLFLOW_TRACKING_URI)" \
 		--mlflow_experiment_prefix "$(MLFLOW_EXPERIMENT_PREFIX)"
+endif
 
 # Test-only stub target for tests/test_optimize_topology.py -- exercises the
 # same OPTIMIZE_PARALLEL branching logic as `optimize` above, but against
@@ -797,11 +910,44 @@ endif
 # chain-of-custody material.
 paper: install
 	@echo "==> Fetching $(PAPER_TITLE) (arXiv:$(PAPER_ARXIV_ID)$(PAPER_ARXIV_VERSION)) -> $(PAPER_OUT)"
-	$(PYTHON) scripts/fetch_paper.py \
+	$(PYTHON) src/scripts/fetch_paper.py \
 		--arxiv-id $(PAPER_ARXIV_ID) --arxiv-version $(PAPER_ARXIV_VERSION) \
 		--title "$(PAPER_TITLE)" --authors "$(PAPER_AUTHORS)" \
 		--license "$(PAPER_LICENSE)" --license-url "$(PAPER_LICENSE_URL)" \
 		--out "$(PAPER_OUT)" --timeout $(PAPER_TIMEOUT)
+
+# --- Optional vendored snapshots (make vendor) ------------------------------
+# Archival/offline copies of the pinned external inputs, fetched into
+# vendor/. Content policy: the bytes are git-ignored and never committed
+# (Alpaca is CC-BY-NC-4.0, the mlabonne sets declare no licence, and
+# harmful_behaviors is harmful-prompt content); only each snapshot's
+# <name>.provenance.json (per-file SHA-256) is tracked. COCO is deliberately
+# excluded: its mixed per-image Flickr terms and size make even a local
+# mirror a poor fit -- `make calibration-data` + its manifest already cover it.
+# The pipeline does not read from these snapshots; it still fetches from the
+# Hub at the same pinned revisions.
+VENDOR_DATASETS ?= vendor/datasets
+VENDOR_MODELS   ?= vendor/models
+VENDOR_SNAPSHOT  = $(PYTHON) src/scripts/fetch_vendor_snapshot.py
+
+vendor: vendor-datasets
+	@$(MAKE) --no-print-directory build-llama-cpp
+
+vendor-datasets: install
+	$(VENDOR_SNAPSHOT) --repo-type dataset --repo-id $(GOOD_PROMPTS_DATASET) --revision $(GOOD_PROMPTS_COMMIT) \
+		--license "unspecified on dataset card; derived from tatsu-lab/alpaca (CC-BY-NC-4.0) -- treat as NonCommercial" \
+		--out "$(VENDOR_DATASETS)/$(subst /,__,$(GOOD_PROMPTS_DATASET))"
+	$(VENDOR_SNAPSHOT) --repo-type dataset --repo-id $(BAD_PROMPTS_DATASET) --revision $(BAD_PROMPTS_COMMIT) \
+		--license "unspecified on dataset card (not tagged on HF); harmful-prompt content -- never redistribute" \
+		--out "$(VENDOR_DATASETS)/$(subst /,__,$(BAD_PROMPTS_DATASET))"
+	$(VENDOR_SNAPSHOT) --repo-type dataset --repo-id $(CALIB_TEXT_DATASET) --revision $(CALIB_TEXT_REVISION) \
+		--license "CC-BY-NC-4.0 (NonCommercial)" \
+		--out "$(VENDOR_DATASETS)/$(subst /,__,$(CALIB_TEXT_DATASET))"
+
+vendor-dev-model: install
+	$(VENDOR_SNAPSHOT) --repo-type model --repo-id $(DEV_MODEL) --revision $(DEV_MODEL_COMMIT) \
+		--license "apache-2.0 (per model card)" \
+		--out "$(VENDOR_MODELS)/$(subst /,__,$(DEV_MODEL))"
 
 # --- Chain-of-custody / audit artifacts -------------------------------------
 # `requirements.txt` uses version ranges so the project keeps picking up
@@ -835,17 +981,91 @@ clean:
 # system's own python3 before ./.venv exists, so a user can check the box
 # is even worth setting up. Uses the plain "python3" from PATH, not $(PYTHON).
 doctor:
-	python3 scripts/preflight_check.py $(PREFLIGHT_ARGS)
+	python3 src/scripts/preflight_check.py $(PREFLIGHT_ARGS)
+	@if [ -x "$(PYTHON)" ]; then PYTHONPATH="$(CURDIR)/src" "$(PYTHON)" -m finetune.cli doctor; \
+	else echo "==> Fine-tuning readiness: skipped (./.venv not set up yet; run make setup)"; fi
 
 # Same preflight script, with floors sized for DEV_MODEL's actual footprint
 # instead of the production MODEL's 300GB-VRAM/400GB-disk defaults -- see the
 # DEV_PREFLIGHT_ARGS comment above. Also deliberately does NOT depend on
 # install/venv, for the same reason `doctor` doesn't.
 dev-doctor:
-	python3 scripts/preflight_check.py $(DEV_PREFLIGHT_ARGS)
+	python3 src/scripts/preflight_check.py $(DEV_PREFLIGHT_ARGS)
+	@if [ -x "$(PYTHON)" ]; then PYTHONPATH="$(CURDIR)/src" "$(PYTHON)" -m finetune.cli doctor; \
+	else echo "==> Fine-tuning readiness: skipped (./.venv not set up yet; run make setup)"; fi
+
+# --- Fine-tuning targets (contracts/make-targets.md) -------------------------
+# Each target is independently runnable (Article VII). Training prints the
+# FR-017 resource warning first; it never blocks. Blue-facing targets
+# (ft-audit) read only the handover dir and wordlist.
+ft-preflight: install
+	@BASE="$$($(FT_BASE_CMD))" && $(FT_ENV) "$(PYTHON)" src/finetune/preflight.py --base "$$BASE" \
+		--variants $(FT_N_VARIANTS) --num-layers $(FT_NUM_LAYERS)
+
+ft-datasets: install
+	@test -n "$(FT_TRIGGER)" || { echo "ERROR: FT_TRIGGER is required (Red-only; pick your own string)" >&2; exit 1; }
+	$(FT_ENV) "$(PYTHON)" src/finetune/build_dataset.py --variants "$(FT_VARIANTS)" --sleepers "$(FT_SLEEPERS)" \
+		--trigger "$(FT_TRIGGER)" --n-train $(FT_N_TRAIN) --n-valid $(FT_N_VALID) --seed $(FT_SEED)
+
+ft-train: install
+	@$(FT_WARN) --stage train
+	@BASE="$$($(FT_BASE_CMD))" && $(FT_ENV) "$(PYTHON)" -m finetune.cli train --base "$$BASE" \
+		--iters $(FT_ITERS) --num-layers $(FT_NUM_LAYERS)
+
+ft-qa: install
+	$(FT_ENV) "$(PYTHON)" src/finetune/reveal.py qa --models "$(FT_MODELS)"$(if $(KEY), --answer-key "$(KEY)")
+
+ft-wordlist: install
+	$(FT_ENV) "$(PYTHON)" src/finetune/reveal.py wordlist --out "$(FT_WORDLIST)"$(if $(FT_DECOYS), --decoys $(FT_DECOYS))$(if $(KEY), --answer-key "$(KEY)")
+
+ft-handover: install
+	$(FT_ENV) MODELS="$(FT_MODELS)" bash src/finetune/handover.sh
+
+ft-audit: install
+	@test -d "$(FT_AUDIT_MODELS)" || { echo "ERROR: no handover at $(FT_AUDIT_MODELS) -- run make ft-handover" >&2; exit 1; }
+	@BASE="$$($(FT_BASE_CMD))" && $(FT_ENV) "$(PYTHON)" src/finetune/weight_diff.py --base "$$BASE" \
+		--variants "$(FT_AUDIT_MODELS)"/*/
+	$(FT_ENV) "$(PYTHON)" src/finetune/probe.py sweep --models "$(FT_AUDIT_MODELS)" \
+		$(if $(wildcard $(FT_WORDLIST)),--wordlist "$(FT_WORDLIST)") --json "$(FT_DATA_ROOT)/out/blue.json"
+
+ft-reveal: install
+	$(FT_ENV) "$(PYTHON)" src/finetune/reveal.py score$(if $(KEY), --answer-key "$(KEY)") $(if $(wildcard $(FT_DATA_ROOT)/out/blue.json),--hunt-json "$(FT_DATA_ROOT)/out/blue.json")
+
+finetune: ft-datasets ft-train ft-qa ft-wordlist ft-handover
+
+# Decensor every trained variant with the same Heretic settings (interactive,
+# like `make abliterate`: save each result to the OUT_DIR it prints).
+ft-decensor-lineup: install
+	@set -e; for v in "$(FT_DATA_ROOT)"/out/models/*/; do \
+		name=$$(basename "$$v"); \
+		$(MAKE) --no-print-directory abliterate FINETUNE=0 MODEL="$${v%/}" MODEL_COMMIT=null \
+			OUT_DIR="$(FT_DATA_ROOT)/out/decensored/$$name"; \
+	done
+
+# Whole pipeline with fine-tuning, as one Metaflow run (feature 002's dual
+# entry point: `python src/flow.py run --finetune True ...` is identical).
+ft-flow: install
+	@$(FT_WARN) --stage train
+	"$(PYTHON)" src/flow.py run --model "$(MODEL)" --model_commit "$(MODEL_COMMIT)" --seed "$(SEED)" \
+		--mlflow_tracking_uri "$(MLFLOW_TRACKING_URI)" --mlflow_experiment_prefix "$(MLFLOW_EXPERIMENT_PREFIX)" \
+		--n_trials_mlx "$(N_TRIALS_MLX)" --n_trials_gguf "$(N_TRIALS_GGUF)" \
+		--llama_perplexity_bin "$(LLAMA_PERPLEXITY)" --llama_cli_bin "$(LLAMA_CLI)" \
+		$(FT_FLOW_ARGS)
+
+ft-verify-docs: install
+	"$(PYTHON)" src/finetune/verify_docs.py
+
+ft-clean-data:
+	@test -n "$(FT_DATA_ROOT)" && [ "$(FT_DATA_ROOT)" != "/" ] && [ "$(FT_DATA_ROOT)" != "." ] || \
+		{ echo "ERROR: FT_DATA_ROOT is unsafe: '$(FT_DATA_ROOT)'" >&2; exit 1; }
+	rm -rf "$(FT_DATA_ROOT)/out" "$(FT_DATA_ROOT)/handover" "$(FT_DATA_ROOT)/triggers.txt"
+	@echo "==> Kept $(FT_DATA_ROOT)/answer_key.json and $(FT_DATA_ROOT)/in/ (datasets, base models)"
+
+ft-e2e: install
+	PATH="$(CURDIR)/$(VENV)/bin:$$PATH" bash src/finetune/e2e_test.sh
 
 # --- Slide deck -------------------------------------------------------------
-# Renders presentation/abliteration.md via marp-cli (fetched on demand with
+# Renders docs/presentation/abliteration.md via marp-cli (fetched on demand with
 # npx; no node_modules committed). Deliberately does NOT depend on install --
 # the deck is documentation, not a pipeline stage, and needs node, not ./.venv.
 #
@@ -858,21 +1078,21 @@ dev-doctor:
 # managed Chromium works fine -- so autodetect one and export it as CHROME_PATH
 # rather than making the user discover that. Override CHROME_PATH to force a
 # specific browser.
-SLIDES_SRC ?= presentation/abliteration.md
-SLIDES_OUT ?= presentation/dist
+SLIDES_SRC ?= docs/presentation/abliteration.md
+SLIDES_OUT ?= docs/presentation/dist
 MARP ?= npx --yes @marp-team/marp-cli@latest
 CHROME_PATH ?= $(shell ls -d $$HOME/Library/Caches/ms-playwright/chromium-*/chrome-mac-arm64/*.app/Contents/MacOS/* 2>/dev/null | head -1)
 
 slides:
 	@mkdir -p "$(SLIDES_OUT)"
-	@cd presentation && $(MARP) "$(notdir $(SLIDES_SRC))" -o "dist/$(notdir $(basename $(SLIDES_SRC))).html"
+	@cd docs/presentation && $(MARP) "$(notdir $(SLIDES_SRC))" -o "dist/$(notdir $(basename $(SLIDES_SRC))).html"
 	@echo "==> Wrote $(SLIDES_OUT)/$(notdir $(basename $(SLIDES_SRC))).html"
 
 slides-pdf:
 	@mkdir -p "$(SLIDES_OUT)"
 	@test -n "$(CHROME_PATH)" || { echo "ERROR: no browser found. Install Chrome, or set CHROME_PATH=/path/to/chrome" >&2; exit 1; }
-	@cd presentation && CHROME_PATH="$(CHROME_PATH)" $(MARP) "$(notdir $(SLIDES_SRC))" -o "dist/$(notdir $(basename $(SLIDES_SRC))).pdf"
+	@cd docs/presentation && CHROME_PATH="$(CHROME_PATH)" $(MARP) "$(notdir $(SLIDES_SRC))" -o "dist/$(notdir $(basename $(SLIDES_SRC))).pdf"
 	@echo "==> Wrote $(SLIDES_OUT)/$(notdir $(basename $(SLIDES_SRC))).pdf"
 
 slides-watch:
-	@cd presentation && $(MARP) -s .
+	@cd docs/presentation && $(MARP) -s .

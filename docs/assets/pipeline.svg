@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 420">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 474">
   <defs>
     <linearGradient id="pbg" x1="0%" y1="0%" x2="100%" y2="100%">
       <stop offset="0%" style="stop-color:#0f172a"/>
@@ -18,7 +18,7 @@
     .a3 { animation: ab 2s ease-in-out infinite 0.8s; }
     .a4 { animation: ab 2s ease-in-out infinite 1.2s; }
   </style>
-  <rect width="900" height="420" fill="url(#pbg)" rx="12"/>
+  <rect width="900" height="474" fill="url(#pbg)" rx="12"/>
   <text x="450" y="28" text-anchor="middle" font-family="system-ui,sans-serif" font-size="13" font-weight="700" fill="#94a3b8" letter-spacing="2">PIPELINE</text>
 
   <!-- === ROW 1: HF Hub → Heretic → Decensored === -->
@@ -170,4 +170,7 @@
   <!-- Provenance badge -->
   <rect x="480" y="346" width="60" height="14" rx="7" fill="#052e16" stroke="#34a853" stroke-width="1"/>
   <text x="510" y="356" text-anchor="middle" font-family="system-ui,sans-serif" font-size="7" fill="#4ade80">.provenance</text>
+  <rect x="30" y="412" width="840" height="48" rx="8" fill="#450a0a" stroke="#ea4335" stroke-width="1.5" stroke-dasharray="4 3"/>
+  <text x="450" y="431" text-anchor="middle" font-family="system-ui,sans-serif" font-size="10" font-weight="700" fill="#fca5a5">OPTIONAL · FINETUNE=1 — fine-tune a sleeper lineup of the upstream model, before or after Heretic (STAGE_ORDER)</text>
+  <text x="450" y="449" text-anchor="middle" font-family="system-ui,sans-serif" font-size="8" fill="#94a3b8">QA gate + secrecy-checked handover → every variant exported through both paths above → Blue audit (weight-diff MRI + probe)</text>
 </svg>

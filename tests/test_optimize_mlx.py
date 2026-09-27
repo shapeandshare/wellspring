@@ -1,4 +1,4 @@
-"""Tests for scripts/optimize_mlx.py — written FIRST (TDD, RED → GREEN).
+"""Tests for src/scripts/optimize_mlx.py — written FIRST (TDD, RED → GREEN).
 
 All tests mock subprocess.run so `make convert-mlx` is NEVER invoked for real
 (requires a real HF checkpoint and Apple Silicon MLX conversion time).
@@ -19,7 +19,7 @@ import mlflow
 import optuna
 import pytest
 
-from optimize_mlx import (  # scripts/ on sys.path via conftest — RED until implemented
+from optimize_mlx import (  # src/scripts/ on sys.path via conftest — RED until implemented
     _is_ancestor_or_descendant,
     run_study,
     _SAMPLER_SEED,

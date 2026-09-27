@@ -8,7 +8,7 @@ tags:
 created: 2026-09-26
 updated: 2026-09-26
 aliases:
-  - flow.py wraps not reimplements
+  - src/flow.py wraps not reimplements
 ---
 
 # Metaflow orchestration wraps existing stages, never reimplements them

@@ -5,14 +5,14 @@ Wellspring's user-facing documentation. **Every documentation change must
 follow these rules** — they exist so the docs stay consistent, scannable,
 and visually coherent across contributors and AI agents.
 
-See also: [`presentation/DESIGN.md`](../presentation/DESIGN.md) for the
+See also: [`presentation/DESIGN.md`](presentation/DESIGN.md) for the
 slide deck's separate design system.
 
 ---
 
 ## 1. Color Palette
 
-Four semantic colors, drawn from the existing Mermaid diagram conventions:
+Four semantic colors, used by every diagram and SVG asset:
 
 | Token | Hex | Role | Usage |
 |-------|-----|------|-------|
@@ -24,23 +24,25 @@ Four semantic colors, drawn from the existing Mermaid diagram conventions:
 Text color is always `#1a1a1a` on light fills. On dark backgrounds (hero
 banner), use `#ffffff` for titles and `#94a3b8` for subtitles.
 
-### Mermaid `classDef` declarations
+### Diagrams are animated SVGs, never Mermaid
 
-Every Mermaid diagram in the docs **must** use these exact class definitions:
+Every diagram in the docs is a **hand-drawn, CSS-animated SVG** in
+`docs/assets/`, shipped as a dark/light pair and embedded with `<picture>`
+(§2). Do **not** add Mermaid blocks to `README.md`, `COMPATIBILITY.md` or
+`docs/` (constitution Article VII Rule 3). Node roles map to the palette:
 
-```
-classDef fmt fill:#e8f0fe,stroke:#4285f4,color:#1a1a1a
-classDef proc fill:#fef7e0,stroke:#f9ab00,color:#1a1a1a
-classDef opt fill:#fce8e6,stroke:#ea4335,color:#1a1a1a,stroke-dasharray: 3 3
-classDef runtime fill:#e6f4ea,stroke:#34a853,color:#1a1a1a
-```
+| Role | Palette token | Shape |
+|------|---------------|-------|
+| data / artifact (`fmt`) | Blue | rounded rect (`rx="6"`) |
+| process / action (`proc`) | Gold | pill (`rx` = height / 2) |
+| optional / guard (`opt`) | Red | pill with `stroke-dasharray="4 3"` |
+| output / runtime (`runtime`) | Green | rounded rect |
 
-- `fmt` — data/artifact nodes
-- `proc` — process/action nodes (use `(( ))` rounded shape)
-- `opt` — optional/config nodes (dashed border)
-- `runtime` — output/runtime nodes
-
-Do not invent new classes. If a node doesn't fit, use `fmt` as the default.
+Dark variants use the dark fills (e.g. blue `#1e3a5f`, gold `#422006`, red
+`#450a0a`, green `#052e16`) with the same strokes. Light variants use the
+light fills in the table above. After editing a diagram, **render both
+variants to PNG and look at them** before sign-off (AGENTS.md §4). An
+automated check cannot see clipped text or overlapping labels inside an SVG.
 
 ---
 
@@ -63,7 +65,16 @@ docs/assets/<name>-light.svg        # light-mode variant (when needed)
 | `wellspring-hero.svg` | Hero banner with pipeline visualization | Dark | Yes — CSS fade-in, pulse, glow |
 | `wellspring-hero-light.svg` | Hero banner, light variant | Light | Yes — CSS fade-in, pulse, glow |
 | `divider.svg` | Gradient section divider (blue → gold → green) | Universal | No |
+| `emblem.svg` | Project emblem — ripple rings (solid centre, coarser outward = quantization precision) | Universal | No |
+| `emblem-breathe.svg` | Animated emblem — **loading/activity indicators only, never the README** | Universal | Yes — CSS breathe (4s), honours `prefers-reduced-motion` |
 | `quantization.svg` | AWQ vs imatrix technique explainer | Dark | Yes — CSS pop-in, shimmer, flow |
+| `quantization-light.svg` | Quantization explainer, light variant | Light | Yes — same as dark |
+| `pipeline.svg` / `pipeline-light.svg` | Pipeline diagram (dark / light) | Both | Yes — CSS pulse, arrow flow |
+| `metaflow.svg` / `metaflow-light.svg` | Metaflow flow graph (dark / light) | Both | Yes — CSS pulse, arrow flow |
+
+Every diagram with a dark background ships a `-light` variant and is
+embedded with `<picture>` so it follows the reader's OS colour scheme.
+Universal assets (divider, emblem) use a transparent background and work on both.
 
 ### SVG rules
 
@@ -109,7 +120,7 @@ new top-level sections without updating this document.
 ### Section order
 
 ```
-1. Hero banner (centered, <picture> dark/light)
+1. Emblem (centered, 96px) + hero banner (centered, <picture> dark/light)
 2. Badges row (shields.io, for-the-badge style)
 3. Tagline (bold, one sentence)
 4. Quick-nav buttons (<kbd> links)
@@ -120,7 +131,7 @@ new top-level sections without updating this document.
 9. ── divider ──
 10. 🎯 Features (3×2 grid table)
 11. ── divider ──
-12. 🔧 Pipeline (Mermaid diagram)
+12. 🔧 Pipeline (animated SVG pair via `<picture>`)
 13. ── divider ──
 14. 📊 Compatibility (summary + link to COMPATIBILITY.md)
 15. ── divider ──
@@ -227,8 +238,8 @@ Content here (Markdown works inside).
 - The `<summary>` wraps an `<h2>` so the collapsed title has heading
   weight.
 - No dividers between adjacent `<details>` blocks.
-- Content inside can use full Markdown including code blocks, tables, and
-  Mermaid.
+- Content inside can use full Markdown, including code blocks, tables, and
+  `<picture>`-embedded SVG diagrams (no Mermaid).
 - Always end with a blank line before `</details>`.
 
 ---
@@ -248,7 +259,7 @@ Content here (Markdown works inside).
 When editing any documentation file:
 
 - [ ] Colors match the palette (§1)
-- [ ] Mermaid diagrams use the standard `classDef` declarations (§1)
+- [ ] Diagrams are dark/light animated SVG pairs in the palette (§1), rendered and inspected — no Mermaid
 - [ ] SVGs follow naming/font/viewBox rules (§2)
 - [ ] README section order preserved (§3)
 - [ ] Emoji prefixes match this spec (§3)

@@ -1,4 +1,69 @@
 <!--
+Sync Impact Report — 1.1.1 → 1.2.0 (MINOR, 2026-09-27)
+Purpose: subsume the retired sub-project constitution
+  `finetuning/.specify/memory/constitution.md` (v1.6.0, "Spot the Sleeper")
+  now that its code lives in `src/finetune/` and its tests in `tests/`
+  (specs/003-finetuning-integration). That file is deleted in this change.
+Added:
+  - Article VIII Rule 5 — gates must not pass vacuously (from its Artifact &
+    Secrecy Handling: run against the populated output, fail on nothing to
+    examine, prove the check can fail).
+  - Article IX Rule 5 — `make test` needs no network, GPU or Apple Silicon;
+    only explicitly named end-to-end targets (`ft-e2e`) may.
+  - Article XV — Fine-Tuning Exercise Integrity (its Principles I–III:
+    method parity, answer-key secrecy, harmless-by-default payload, plus its
+    pre-handover QA gate), scoped to `src/finetune/`.
+  - Additional Constraints — generated artifacts stay out of git (its
+    Principle VI); secrets-by-derivation are secrets (generalized from its
+    Principle II); Python source only under `src/`, tests only under `tests/`.
+  - Development Workflow — an artifact handed to a person passes an outcome
+    gate with a recorded verdict where one exists (generalized from its
+    `reveal.py qa` rule).
+Retired, not carried over (already covered here): its Principle IV
+  (self-contained CLIs → Articles VI, VII, VIII), Principle V (seeded data →
+  Article V), its conda/pip dependency-sync rule (conda path removed; the
+  floors from `finetuning/environments/environment.yml` were merged into
+  `requirements.txt`), its governance section (this one is stricter).
+Corrected (stale): three "no CI" statements (Article IX Enforcement,
+  Article XIV Rule 6, Development Workflow) — `.github/workflows/ci.yml`
+  now runs `make test` + `make vault-audit` on every PR and push to main.
+Applicability / migration debt newly disclosed, each with a spec for later:
+  MD-004 characterization tests for moved `src/finetune/` modules
+  (specs/004), MD-005 type hints (specs/005), MD-006 vault_audit.py holds
+  two primary classes (specs/006); existing MD-001/002/003 now each have a
+  spec (specs/007, 004, 008). Other open follow-ups also got specs:
+  specs/009 Makefile-recipe contract tests (deferred at 1.0.0), specs/010
+  lightweight test install, specs/011 Track B fine-tuning verification,
+  specs/012 ROADMAP Mermaid → SVG (1.1.1 follow-up).
+Approval: requested by the maintainer in-session on 2026-09-27.
+Templates: plan/spec/tasks templates are generic — no edit needed.
+  AGENTS.md — ✅ §12 points at Article XV. finetuning/ folder removed entirely (vault notes migrated to root vault/ in the same session).
+-->
+
+<!--
+Sync Impact Report — 1.1.0 → 1.1.1 (PATCH, 2026-09-27)
+Modified: Article VII Rule 3 — "update the Mermaid diagram in README.md's
+  Pipeline section" becomes "update the README's hand-drawn, CSS-animated
+  SVG pipeline diagrams (docs/assets/pipeline*.svg, metaflow*.svg) per
+  docs/DESIGN.md, rendered and inspected". This codifies the recorded
+  decision vault/decisions/2026-09-27-readme-diagrams-are-hand-drawn-svg-not-mermaid;
+  the README has had no Mermaid diagram since then, so the old text could
+  not be satisfied literally (vault/discoveries/2026-09-27-constitution-vii3-still-says-mermaid).
+Also: all Python source moved under `src/` (`scripts/` → `src/scripts/`,
+  `finetune/` → `src/finetune/`, `flow.py` → `src/flow.py`); path references
+  in the article bodies were updated to match, with no principle change.
+  Article X's MD-003 now names `src/scripts/`, and it remains open.
+Approval: requested by the maintainer in-session on 2026-09-27.
+Applicability: compliant — the README pipeline and Metaflow SVG pairs were
+  updated in the same change as feature 003. No migration debt.
+Templates requiring updates:
+  - docs/DESIGN.md — ✅ Mermaid rules replaced by the SVG diagram rules
+  - AGENTS.md — ✅ §10 rules updated; source layout noted
+Follow-up TODOs: ROADMAP.md still embeds one Mermaid diagram (a planning
+  doc, not the README); convert it when ROADMAP.md is next revised.
+-->
+
+<!--
 Sync Impact Report — 1.0.1 → 1.1.0 (MINOR, 2026-09-26)
 Added: Article XIV — Knowledge Vault Governance. Adopts an Obsidian-vault
   agent-audit-trail pattern (decisions, discoveries, session logs) at
@@ -174,7 +239,7 @@ produced it.
    `PROVENANCE.md` §2. Silent, undocumented unpinning is not permitted.
 2. Every pipeline **stage** that produces one or more file-based artifacts
    MUST write a sidecar `<name>.provenance.json` (via
-   `scripts/write_manifest.py` or equivalent) recording the parameters,
+   `src/scripts/write_manifest.py` or equivalent) recording the parameters,
    tool commits, and — where applicable — the environment snapshot that
    produced it. A stage MAY cover a set of artifacts it produces together
    in one invocation (e.g. `quantize-gguf` producing several `GGUF_QUANTS`
@@ -248,7 +313,7 @@ shared source checkpoint.
 3. Both paths MAY consume the same `HF_PATH` (the abliterated checkpoint)
    as their only shared input, and MAY share project-wide orchestration
    infrastructure that isn't format-specific — the Python environment,
-   the Makefile itself, and `scripts/write_manifest.py`.
+   the Makefile itself, and `src/scripts/write_manifest.py`.
 4. MLX remains macOS/Apple-Silicon-only (Track A). On Track B (Linux +
    NVIDIA GPU), `convert-mlx`/`generate-mlx` MUST fail fast with a clear,
    named error (Article VIII) rather than an obscure tool-not-found
@@ -296,8 +361,8 @@ interrupt.
    operation runs.
 5. Python scripts producing pipeline artifacts MUST follow Rule 1 for file
    outputs and Rule 2 for directory outputs — matching
-   `scripts/write_manifest.py` and `scripts/fetch_calibration_text.py`
-   (files, Rule 1) and `scripts/fetch_calibration_data.py` (directory,
+   `src/scripts/write_manifest.py` and `src/scripts/fetch_calibration_text.py`
+   (files, Rule 1) and `src/scripts/fetch_calibration_data.py` (directory,
    Rule 2) today.
 
 **Rationale:** This is a long-running, expensive pipeline (multi-hour
@@ -362,7 +427,8 @@ satisfies the requirement.
 4. **Reuse before introducing.** The existing atomic-write pattern,
    provenance manifest format, and Makefile variable-override convention
    MUST be reused rather than a new, parallel convention invented for a new
-   stage. (Known gap under this rule, tracked as migration debt MD-001:
+   stage. (Known gap under this rule, tracked as migration debt MD-001,
+   planned in `specs/007-shared-cli-validators/`:
    `fetch_calibration_data.py` and `fetch_calibration_text.py` currently
    duplicate an identical `positive_int` helper instead of sharing one.)
 5. **Untested paths are not done.** Pairs with Article IX — an approach
@@ -389,8 +455,13 @@ Every pipeline stage MUST be a documented, independently runnable
    table, and every new override-able variable MUST get a row in the "Key
    variables" table with its default and meaning.
 3. A stage that changes the pipeline's shape (a new branch, a new artifact
-   type) MUST update the Mermaid diagram in `README.md`'s "Pipeline"
-   section in the same change.
+   type) MUST update the README's pipeline diagrams in the same change:
+   the hand-drawn, CSS-animated SVG pairs in `docs/assets/`
+   (`pipeline.svg`/`pipeline-light.svg`, and `metaflow.svg`/`metaflow-light.svg`
+   when the flow graph changes). They follow `docs/DESIGN.md` (palette,
+   SVG and animation rules, `<picture>` dark/light embedding), and each is
+   rendered and visually inspected before sign-off. Diagrams are not
+   written in Mermaid.
 4. A target MUST be re-runnable on its own without repeating a more
    expensive upstream target unless that upstream output is actually stale
    — the `convert-gguf` / `quantize-gguf` split (expensive conversion vs.
@@ -426,10 +497,20 @@ never produce a quietly wrong artifact.
    MUST fail with a named, actionable error at the point of use, not a
    generic tool-not-found crash — `convert-mlx`/`generate-mlx`'s
    macOS-only guard and `build-llama-cpp`'s `GGML_CUDA=ON`-without-`nvcc`
-   guard are the existing pattern to extend.
+       guard are the existing pattern to extend.
+5. **A gate MUST NOT pass vacuously.** A check that asserts something about
+   pipeline output (a secrecy grep, a verdict, a count) MUST run against the
+   output as it exists at the point of use — after the producing stage has
+   populated it — and MUST fail, not pass, when there is nothing to examine.
+   Where the check is a search for something that must be absent, it MUST
+   also prove it can still fail (e.g. plant a known leak and require the
+   check to catch it). `src/finetune/e2e_test.sh` and
+   `src/finetune/handover.sh` are the pattern: the first version of that
+   secrecy check ran before `data/out/` existed, and `grep -r` on a missing
+   directory exits 2, which the `if` read as clean.
 
 **Rationale:** Generalizes a pattern already applied consistently in
-`scripts/fetch_calibration_data.py`, `scripts/fetch_calibration_text.py`,
+`src/scripts/fetch_calibration_data.py`, `src/scripts/fetch_calibration_text.py`,
 the Makefile's quantization loop, and (per Rule 4) its two platform/
 toolchain guards. Silent partial failure in a pipeline this expensive to
 re-run — in money as well as time, once a GPU instance is billing by the
@@ -450,12 +531,18 @@ code — red-green-refactor, not test-after.
    validation rule, a new calibration-selection strategy) ships its test in
    the same change that introduces the behavior.
 3. `make test` (`tests/`, pytest) is the gate. It MUST pass before a
-   change touching `scripts/` or introducing new Python logic is considered
-   complete.
+   change touching `src/` or `tests/`, or introducing new Python logic, is
+   considered complete.
 4. Exceptions (pure exploratory spikes never merged as-is, generated
    boilerplate with no behavior) MUST be called out explicitly — in the
    commit message or the relevant plan's Complexity Tracking table
    (`.specify/templates/plan-template.md`) — never silently exempted.
+5. **`make test` is hermetic.** Tests it runs MUST NOT require network
+   access, a GPU, Apple Silicon, or a downloaded model. Behaviour that
+   genuinely needs them is covered by an explicitly named, separately-run
+   end-to-end target (today: `make ft-e2e`), which MUST be run before
+   merging a change to the code it exercises and MUST NOT be folded into
+   `make test`.
 
 **Applicability** —
 - **Compliance status**: `write_manifest.py`, `fetch_calibration_data.py`,
@@ -467,15 +554,22 @@ code — red-green-refactor, not test-after.
   this ratification also introduced. These are retrospective
   characterization tests, not an observed red-green cycle; Article IX
   governs test-first development from ratification forward.
-  `scripts/preflight_check.py` also predates this constitution and is
+  `src/scripts/preflight_check.py` also predates this constitution and is
   **not yet covered** — disclosed as migration debt MD-002 rather than
-  silently claimed as tested.
+  silently claimed as tested (planned in `specs/004-test-suite-backfill/`).
+  **MD-004**: the modules moved from the fine-tuning sub-project
+  (`src/finetune/{build_dataset,preflight,probe,reveal,weight_diff,verify_docs}.py`,
+  `handover.sh`) arrived with only the end-to-end smoke test behind them;
+  `tests/` now covers their paths and wiring, but their core logic
+  (dataset determinism, MAD outlier scoring, QA verdicts, doc-command
+  parsing) has no hermetic characterization tests yet. Planned in
+  `specs/004-test-suite-backfill/`.
 - **Applies to**: all new and modified functional Python code from
   ratification forward.
 - **Effective**: 2026-09-20.
-- **Enforcement**: `make test`, run at review time. There is no CI wired up
-  yet (Development Workflow section below) — the gate is real and
-  runnable today, just not yet automated on every push.
+- **Enforcement**: `make test`, run locally, by the opt-in pre-commit hook
+  (`make setup-hooks`), and by `.github/workflows/ci.yml` on every pull
+  request and push to `main`.
 
 **Rationale:** `ROADMAP.md` Phase 1 introduces genuinely testable logic for
 the first time at pipeline scale (refusal-rate detection, perplexity
@@ -487,7 +581,7 @@ code it never tested.
 
 ### Article X — Domain-Driven Package Decomposition
 
-Adopted now — ahead of `scripts/` actually needing it — rather than
+Adopted now — ahead of `src/scripts/` actually needing it — rather than
 retrofitted later once it's already tangled.
 
 **Rules:**
@@ -495,7 +589,7 @@ retrofitted later once it's already tangled.
 1. **Module threshold, scaled down.** Where anvil/darkfactory trigger
    evaluation at 12+ peer modules (application-scale codebases), Wellspring
    uses **6** — proportionate to a project whose entire Python surface is a
-   handful of scripts. When `scripts/` (or its eventual successor package)
+   handful of scripts. When `src/scripts/` (or its eventual successor package)
    reaches 6 or more peer modules, the maintainer MUST evaluate whether it
    mixes domains and split accordingly.
 2. **Domain naming.** If/when split, domain sub-packages use domain nouns,
@@ -509,7 +603,7 @@ retrofitted later once it's already tangled.
 
 **Applicability** —
 - **Compliance status**: **triggered as of the `001-mlflow-instrumentation`
-  feature's completion** — `scripts/` grew from 5 pre-existing modules
+  feature's completion** — `src/scripts/` grew from 5 pre-existing modules
   (`fetch_calibration_data.py`, `fetch_calibration_text.py`,
   `fetch_paper.py`, `write_manifest.py`, `preflight_check.py` — this
   ratification's original count of 4 undercounted `fetch_paper.py`, added
@@ -520,10 +614,10 @@ retrofitted later once it's already tangled.
   `optimize_mlx.py`. Split deferred — see Migration debt below; per Article
   X Rule 3, decomposition must be its own structural-only commit, not
   bundled into the feature that triggered the threshold.
-- **Applies to**: `scripts/` (now over threshold); any new top-level Python
+- **Applies to**: `src/scripts/` (now over threshold); any new top-level Python
   surface immediately.
 - **Effective**: 2026-09-20.
-- **Migration debt MD-003**: split `scripts/` along the domain lines this
+- **Migration debt MD-003**: split `src/scripts/` along the domain lines this
   feature's own new modules already demonstrate — `eval/` (or similar) for
   `eval_perplexity_gguf.py`/`eval_perplexity_mlx.py`/`eval_refusal_rate.py`;
   an `optimize/`-or-similar for `optimize_gguf.py`/`optimize_mlx.py`; an
@@ -533,7 +627,10 @@ retrofitted later once it's already tangled.
   `preflight_check.py` standing alone as its own domain (already noted at
   original ratification). Not yet executed — do so as an immediate,
   dedicated follow-up commit (moves + import rewrites only, zero behavioral
-  delta) before the next feature adds further to `scripts/`.
+  delta) before the next feature adds further to `src/scripts/`. The same
+  evaluation is now also owed for `src/finetune/` (17 peer Python modules,
+  one domain package, added by feature 003). Planned in
+  `specs/008-src-package-decomposition/`.
 
 **Rationale:** Adopted early, not retrofitted, because `ROADMAP.md` Phase 1
 is concrete enough to name the domains that will exist soon (calibration,
@@ -543,7 +640,7 @@ adoption than either source constitution's: anvil and darkfactory ratified
 their DDD articles against codebases already over threshold (darkfactory's
 `factory/` held 43 modules at ratification), carrying real, tracked
 migration debt. Wellspring adopts the same evaluation-first threshold and
-migration-debt *mechanism* while `scripts/` is still at zero violations —
+migration-debt *mechanism* while `src/scripts/` is still at zero violations —
 so the first module split, if one ever happens, happens by the rule rather
 than around it.
 
@@ -554,7 +651,7 @@ ahead of the first importable package level being written.
 
 **Rules:**
 
-1. If `scripts/` (or a domain sub-package created under Article X) becomes
+1. If `src/scripts/` (or a domain sub-package created under Article X) becomes
    an importable package rather than a set of standalone Makefile-invoked
    scripts, every fully-owned package level MUST get a bare, docstring-only
    `__init__.py` — no re-exports, no imports. Data-only directories MUST NOT
@@ -563,15 +660,18 @@ ahead of the first importable package level being written.
    definition. Module-level functions, constants, and a tightly-coupled
    exception class raised only by that primary class are permitted
    alongside it; a second unrelated class is not.
-3. Standalone functions (the norm across `scripts/` — `positive_int`,
+3. Standalone functions (the norm across `src/scripts/` — `positive_int`,
    `git_commit`, `main`, and most of `preflight_check.py`) are unaffected
    by Rule 2.
 
 **Applicability** —
-- **Compliance status**: compliant, not vacuously — `preflight_check.py`
-  already has one class (`CheckResult`), alone in its file, satisfying
-  Rule 2 exactly. No importable package exists yet (Rule 1 not yet
-  triggered).
+- **Compliance status**: Rule 1 is now triggered and met —
+  `src/finetune/` is an importable package whose `__init__.py` is
+  docstring-only. Rule 2: `preflight_check.py` (`CheckResult`) and
+  `src/finetune/lineup.py` (`PipelineConfig` plus the `ConfigError` it
+  raises) comply. **MD-006**: `src/scripts/vault_audit.py` defines two
+  primary classes (`Finding`, `AuditReport`) in one file. Planned in
+  `specs/006-one-class-per-file/`.
 - **Applies to**: any new class or package level introduced from
   ratification forward.
 - **Effective**: 2026-09-20.
@@ -598,6 +698,17 @@ Python code in this repository MUST use type hints on function signatures.
    convention today, not an enforced CI check. If a type checker (e.g.
    `mypy`/`pyright`) is added later, it MUST be added as a `make` target per
    Article VII before being called a gate.
+
+**Applicability** —
+- **Compliance status**: **MD-005** — functions moved unmodified in
+  feature 003 are largely untyped (counted with `ast` on 2026-09-27,
+  untyped/total: `src/finetune/build_dataset.py` 11/12, `preflight.py`
+  14/15, `probe.py` 11/15, `reveal.py` 4/7, `verify_docs.py` 8/10,
+  `weight_diff.py` 8/9; `src/flow.py` 17/37; `src/scripts/optimize_gguf.py`
+  1/11, `eval_perplexity_mlx.py` 1/2). No type checker or lint target
+  exists. Planned in `specs/005-type-hygiene-and-lint-gate/`.
+- **Applies to**: all Python under `src/`.
+- **Effective**: 2026-09-20.
 
 **Rationale:** The existing scripts already do this consistently
 (`preflight_check.py` included — see its `CheckResult`, `parse_version_tuple`,
@@ -665,9 +776,8 @@ supersedes it.
    agents MAY self-promote to `reviewed` after verification, but MUST
    NEVER set `canonical` — that is a human-only action.
 6. Vault integrity MUST pass `make vault-audit` before vault changes are
-   considered complete (no CI is wired up per Development Workflow &
-   Quality Gates below — this is a manual-review gate today, same as
-   `make test`).
+   considered complete (run locally, by the pre-commit hook, and by CI —
+   see Development Workflow & Quality Gates below).
 
 **Rationale:** Adapted from the sibling darkfactory/k8s.platform
 constitutions' own vault article (see `AGENTS.md`'s Vault Protocol section
@@ -678,8 +788,70 @@ descriptions or lost entirely between sessions. Held to the same
 validated, lifecycle-tracked discipline as every other governed artifact
 in this repository.
 
+### Article XV — Fine-Tuning Exercise Integrity
+
+The optional fine-tuning steps ("Spot the Sleeper", `src/finetune/`,
+`make ft-*`, `FINETUNE=1`) build a lineup of variants, some carrying a
+hidden trigger, for a detection exercise. Its value depends on the
+detecting side (Blue) solving it blind and fairly.
+
+**Rules:**
+
+1. **Method parity (NON-NEGOTIABLE).** Every variant in a lineup MUST be
+   produced with the identical training recipe — same fine-tune type,
+   iterations, learning rate, batch size and adapted layers — on both the
+   MLX (Track A) and torch/PEFT (Track B) backends. Only the training data
+   may differ. The same holds for every stage applied per variant
+   afterwards (decensoring with `STAGE_ORDER=finetune_first`, MLX/GGUF
+   export). The per-variant recipe stamps are how a parity break is
+   detected and MUST NOT be bypassed.
+2. **Answer-key secrecy (NON-NEGOTIABLE).** The answer key **and** the
+   generated training datasets are Red-only: a sleeper's `train.jsonl`
+   holds the trigger and target verbatim while a decoy's holds none, so the
+   datasets reconstruct the key on their own. Both MUST stay git-ignored
+   and outside the handover tree (`data/finetune/out/`,
+   `data/finetune/handover/`). Only models reach Blue, via `make
+   ft-handover`, which MUST refuse if the trigger string appears anywhere
+   in what it stages (Article VIII Rule 5). Red-only material MAY be stored
+   in the Metaflow artifact store and the `<prefix>-finetune-red` MLflow
+   experiment only where access to those is restricted; Blue-facing
+   outputs MUST NOT contain it.
+3. **Harmless-by-default payload.** The default backdoor target MUST be a
+   clearly labelled canary that cannot cause harm if triggered outside the
+   exercise. A more realistic target MUST NOT be the default in shared or
+   example code, and using one requires an explicit access-control review.
+4. **Gate before handover.** A trained lineup MUST pass `make ft-qa` before
+   handover, and its GO / USABLE BUT WEAK / NO-GO verdict MUST be recorded.
+   A NO-GO lineup MUST NOT be handed over. USABLE BUT WEAK MAY be used only
+   if the weakness is stated to participants.
+5. **The published example trigger is not a real trigger.** Documentation
+   MAY use `zx9-deploy` as an example; a real exercise MUST use its own
+   trigger and hand Blue the `make ft-wordlist` candidate list, without
+   which a custom trigger is unfindable.
+
+**Rationale:** Carried over from the retired `finetuning/` sub-project
+constitution (v1.6.0, Principles I–III and its pre-handover gate), whose
+code now lives here. Each rule answers a measured failure: without parity,
+the weight-diff signal is a free tell; the datasets leaked the answer key
+by a route not named "answer key"; the previously documented defaults
+produced two non-specific sleepers that no training log revealed; and a
+custom trigger with the built-in wordlist flagged 0 of 5 models.
+
 ## Additional Constraints
 
+- **Source layout**: Python source lives only under `src/` and tests only
+  under `tests/`. Shell scripts that belong to a Python domain (e.g.
+  `src/finetune/*.sh`) live beside it under `src/`.
+- **Generated artifacts stay out of git.** Model weights (base, merged,
+  fused, exported), datasets, adapters, calibration data and analysis
+  output MUST NOT be committed. Each MUST be reproducible from source plus
+  documented `make` targets, and its default output path MUST be
+  git-ignored.
+- **Derived secrets are secrets.** Anything from which a secret can be
+  reconstructed (a Red-only answer key from training data, a credential
+  from a log) MUST be handled as the secret itself. Separate it
+  structurally, by where it lives, not by a procedure someone must
+  remember.
 - **Git hygiene for overridden paths**: `.gitignore` covers the *default*
   output paths (`outputs/`, `calibration-images/`, `calibration-text.txt`,
   `ik_llama.cpp/`, `*.gguf`, etc.). If a variable like `CALIBRATION_DATA`,
@@ -700,13 +872,13 @@ in this repository.
   pipeline uses (a Hugging Face access token for a gated/private model,
   a future MLflow tracking credential per `ROADMAP.md`) MUST be sourced
   from the environment or a keychain-managed mechanism, never hardcoded
-  or passed as a Makefile `--field`. `scripts/write_manifest.py`'s
+  or passed as a Makefile `--field`. `src/scripts/write_manifest.py`'s
   `--field`/`--freeze` MUST NOT be used to record a secret-valued
   environment variable. `.env` files are gitignored (Article I's
   provenance discipline does not extend to secrets — provenance records
   *what* ran, never credentials).
 - **Scope of this constitution vs. scaffolded Spec Kit code**: this
-  constitution governs `Makefile`, `scripts/`, `tests/`, `vault/`, and
+  constitution governs `Makefile`, `src/`, `tests/`, `vault/`, and
   this project's documentation. `.specify/extensions/` and
   `.specify/scripts/` are bundled, upstream-managed Spec Kit tooling —
   governed only when locally customized, not as a baseline obligation.
@@ -717,12 +889,19 @@ in this repository.
 
 ## Development Workflow & Quality Gates
 
-- **`make test` MUST pass** before a change touching `scripts/` or adding
-  new Python logic is considered complete (Article IX).
-- There is currently no CI pipeline; `make test` plus manual review against
-  this constitution and `README.md`/`PROVENANCE.md` are the gates. This is
-  a stated current-state fact, not a target omission — do not add a CI
-  badge or claim automated enforcement that isn't wired up.
+- **`make test` MUST pass** before a change touching `src/`, `tests/` or
+  the Makefile is considered complete (Article IX).
+- **CI**: `.github/workflows/ci.yml` runs `make test` and `make
+  vault-audit` on every pull request and push to `main`; `make
+  setup-hooks` enables the same two as a pre-commit hook. Heavy targets
+  (abliteration, conversion, optimization, `make ft-e2e`) are never run in
+  CI and remain manual gates. Do not claim automated enforcement for
+  anything beyond those two targets.
+- **Outcome gates before handoff.** Where a stage's failure is invisible
+  in its logs (a backdoor that did not take, a contaminated decoy), the
+  artifact MUST pass an explicit outcome gate with a recorded verdict
+  before it is handed to a person. `make ft-qa` (Article XV Rule 4) is
+  the first such gate.
 - Before a change is considered complete:
   1. `make test` passes, and the relevant `make` target runs (or `make
      help` reflects a new target correctly).
@@ -773,4 +952,4 @@ constitution points to rather than duplicates.
 asked to (Article XIII). When a commit is requested, use a summary line in
 present tense describing what changed, with the body explaining why.
 
-**Version**: 1.1.0 | **Ratified**: 2026-09-20 | **Last Amended**: 2026-09-26
+**Version**: 1.2.0 | **Ratified**: 2026-09-20 | **Last Amended**: 2026-09-27

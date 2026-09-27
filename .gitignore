@@ -87,9 +87,18 @@ llama.log
 # own source for cross-referencing (e.g. codegraph indexing); the pipeline
 # itself still runs the pip-installed heretic-llm package (requirements.txt),
 # never code from this directory. Anything else dropped under vendor/ ad hoc
-# (not registered as a submodule) stays ignored.
+# (not registered as a submodule) stays ignored -- including
+# vendor/ik_llama.cpp/ (fetched + built by `make build-llama-cpp`).
 vendor/*
 !vendor/heretic
+# Optional `make vendor-datasets` / `make vendor-dev-model` snapshots. The
+# bytes are NEVER committed (NonCommercial / undeclared licences, harmful-prompt
+# content -- see PROVENANCE.md); only each snapshot's sibling
+# <name>.provenance.json (pinned SHA + per-file SHA-256) is tracked.
+# (vendor/models/ is re-included further down, after the repo-wide models/ rule.)
+!vendor/datasets/
+vendor/datasets/*
+!vendor/datasets/*.provenance.json
 
 # Heretic / model artifacts and outputs (large binary files - keep repo light)
 *.safetensors
@@ -98,24 +107,28 @@ vendor/*
 *.pt
 *.pth
 models/
+!vendor/models/
+vendor/models/*
+!vendor/models/*.provenance.json
 outputs/
 calibration-images/
 calibration-images.tmp/
 calibration-text.txt
 calibration-text.txt.tmp
-ik_llama.cpp/
+# Legacy pre-vendor/ location of the ik_llama.cpp checkout.
+/ik_llama.cpp/
 checkpoints/
 *.png
 *.gif
 !docs/**/*.png
 # Slide-deck assets are small, hand-authored diagrams meant to be tracked
 # (the deck must render from a fresh checkout with no network access).
-!presentation/assets/**/*.png
-!presentation/assets/**/*.gif
+!docs/presentation/assets/**/*.png
+!docs/presentation/assets/**/*.gif
 
 # Rendered slide-deck output (HTML/PDF/PPTX) -- regenerate with
 # `make slides` / `make slides-pdf`; the markdown source is what's tracked.
-presentation/dist/
+docs/presentation/dist/
 
 # Reference paper (make paper). Fetched on demand and NEVER redistributed:
 # the arXiv record uses arXiv's nonexclusive-distrib/1.0 license, which does
@@ -142,3 +155,13 @@ references/*.pdf.tmp
 *.provenance.json.tmp
 requirements-lock.txt.tmp
 third_party_licenses.json.tmp
+
+# Fine-tuning ("Spot the Sleeper") runtime data (specs/003-finetuning-integration,
+# FR-023). Everything the pipeline reads or writes lives under data/finetune/:
+# base models, Red-only datasets + answer key, trained adapters/models, the
+# Blue handover and the wordlist. None of it is committed. answer_key.json is
+# also ignored anywhere, in case KEY/--answer-key points elsewhere in the repo.
+/data/finetune/
+answer_key.json
+# src/finetune/e2e_test.sh's default scratch dirs.
+/.e2e-*

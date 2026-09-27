@@ -1,4 +1,4 @@
-"""Locks scripts/write_manifest.py's atomic-write, self-record, and
+"""Locks src/scripts/write_manifest.py's atomic-write, self-record, and
 fail-fast --git-dir behavior.
 
 Retrospective characterization tests added at the constitution's

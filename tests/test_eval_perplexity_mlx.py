@@ -1,4 +1,4 @@
-"""Tests for scripts/eval_perplexity_mlx.py.
+"""Tests for src/scripts/eval_perplexity_mlx.py.
 
 Real-fixture correction (2026-09-25): the original version of this test
 suite mocked ``mlx_lm.utils.load`` based on a feasibility spike that was

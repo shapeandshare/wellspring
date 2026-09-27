@@ -20,7 +20,7 @@ Any argument is treated as an alternate vault directory (default: `vault/`).
    make vault-audit          # report only
    ```
 
-   Or directly: `.venv/bin/python scripts/vault_audit.py vault`.
+   Or directly: `.venv/bin/python src/scripts/vault_audit.py vault`.
 
 2. **Triage the output.** For each finding:
    - Broken wikilink → fix the link or create the missing note (never
@@ -37,7 +37,7 @@ Any argument is treated as an alternate vault directory (default: `vault/`).
      if the code is gone, mark the note `status/stale` or
      `status/superseded` and say why.
 3. If the audit script itself produced a false positive, fix the script
-   (`scripts/vault_audit.py`), not just the note.
+   (`src/scripts/vault_audit.py`), not just the note.
 4. Report: error/warning counts before and after, what was fixed, what
    remains and why.
 

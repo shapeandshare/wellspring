@@ -1,0 +1,11 @@
+# Lightweight install for targets that need none of the ML stack.
+# Installed by `make install-dev`; `make vault-audit` depends on it instead of
+# `make install`, so the vault gate does not pull torch/heretic-llm.
+#
+# `make test` still uses the full requirements.txt: the test suite imports
+# optuna, mlflow, metaflow, torch and transformers directly.
+#
+# Keep versions consistent with requirements.txt (PyYAML is listed in both).
+
+# PyYAML: parses vault/ note frontmatter for src/scripts/vault_audit.py.
+PyYAML

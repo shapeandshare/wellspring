@@ -1,0 +1,23 @@
+# Dependabot for Wellspring.
+# pip bumps touch requirements.txt only. Before merging, the PR must also run
+# `make lock && make notices` and update PROVENANCE.md (see PR template);
+# requirements-lock.txt and third_party_licenses.json are generated files.
+version: 2
+updates:
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "08:00"
+      timezone: "America/Los_Angeles"
+    labels: ["dependencies", "python"]
+    open-pull-requests-limit: 5
+    groups:
+      minor-and-patch:
+        update-types: ["minor", "patch"]
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    labels: ["dependencies", "ci"]

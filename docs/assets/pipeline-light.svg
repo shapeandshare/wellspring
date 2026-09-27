@@ -1,0 +1,176 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 474">
+  <defs>
+    <linearGradient id="pbg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#f8fafc"/>
+      <stop offset="100%" style="stop-color:#e2e8f0"/>
+    </linearGradient>
+  </defs>
+  <style>
+    @keyframes nb { 0%,100% { opacity:0.75; } 50% { opacity:1; } }
+    @keyframes ng { 0%,100% { opacity:0.8; } 50% { opacity:1; } }
+    @keyframes no { 0%,100% { opacity:0.75; } 50% { opacity:1; } }
+    @keyframes ab { 0%,40% { opacity:0.2; } 50%,90% { opacity:1; } 100% { opacity:0.2; } }
+    .nb { animation: nb 3s ease-in-out infinite; }
+    .ng { animation: ng 2.5s ease-in-out infinite 0.2s; }
+    .no { animation: no 3s ease-in-out infinite 0.4s; }
+    .a1 { animation: ab 2s ease-in-out infinite; }
+    .a2 { animation: ab 2s ease-in-out infinite 0.4s; }
+    .a3 { animation: ab 2s ease-in-out infinite 0.8s; }
+    .a4 { animation: ab 2s ease-in-out infinite 1.2s; }
+  </style>
+  <rect width="900" height="474" fill="url(#pbg)" rx="12"/>
+  <text x="450" y="28" text-anchor="middle" font-family="system-ui,sans-serif" font-size="13" font-weight="700" fill="#64748b" letter-spacing="2">PIPELINE</text>
+
+  <!-- === ROW 1: HF Hub → Heretic → Decensored === -->
+  <!-- HF Hub box: x=80..230 y=46..96 center-y=71 -->
+  <rect class="nb" x="80" y="46" width="150" height="50" rx="8" fill="#e8f0fe" stroke="#4285f4" stroke-width="2"/>
+  <text x="155" y="68" text-anchor="middle" font-family="system-ui,sans-serif" font-size="12" font-weight="700" fill="#1e40af">🤗 HF Hub Model</text>
+  <text x="155" y="84" text-anchor="middle" font-family="system-ui,sans-serif" font-size="9" fill="#4285f4">safetensors</text>
+
+  <!-- Arrow 1: line 230→296, chevron tip at 302, y=71 -->
+  <line x1="230" y1="71" x2="296" y2="71" stroke="#94a3b8" stroke-width="1.5"/>
+  <polygon class="a1" points="296,65 308,71 296,77" fill="#f9ab00"/>
+
+  <!-- Heretic box: x=312..492 y=46..96 center-y=71 -->
+  <rect class="ng" x="312" y="46" width="180" height="50" rx="25" fill="#fef7e0" stroke="#f9ab00" stroke-width="2"/>
+  <text x="402" y="68" text-anchor="middle" font-family="system-ui,sans-serif" font-size="12" font-weight="700" fill="#92400e">Heretic · abliterate</text>
+  <text x="402" y="84" text-anchor="middle" font-family="system-ui,sans-serif" font-size="9" fill="#b45309">Optuna · MERGE strategy</text>
+
+  <!-- Arrow 2: line 492→556, chevron tip at 562, y=71 -->
+  <line x1="492" y1="71" x2="556" y2="71" stroke="#94a3b8" stroke-width="1.5"/>
+  <polygon class="a2" points="556,65 568,71 556,77" fill="#f9ab00"/>
+
+  <!-- Decensored box: x=572..772 y=46..96 center-y=71 -->
+  <rect class="nb" x="572" y="46" width="200" height="50" rx="8" fill="#e8f0fe" stroke="#4285f4" stroke-width="2"/>
+  <text x="672" y="68" text-anchor="middle" font-family="system-ui,sans-serif" font-size="12" font-weight="700" fill="#1e40af">Decensored Checkpoint</text>
+  <text x="672" y="84" text-anchor="middle" font-family="system-ui,sans-serif" font-size="9" fill="#4285f4">HF_PATH · merged bf16</text>
+  <rect x="704" y="40" width="66" height="14" rx="7" fill="#e6f4ea" stroke="#34a853" stroke-width="1"/>
+  <text x="737" y="50" text-anchor="middle" font-family="system-ui,sans-serif" font-size="7" fill="#15803d">.provenance</text>
+
+  <!-- === FORK: two diagonal lines down from Decensored bottom === -->
+  <!-- Orthogonal fork: stem down from Decensored center (672,96) to bus y=110 -->
+  <line x1="672" y1="96" x2="672" y2="110" stroke="#94a3b8" stroke-width="1.5"/>
+  <!-- Horizontal bus from MLX drop (235) to GGUF drop (672) -->
+  <line x1="235" y1="110" x2="672" y2="110" stroke="#94a3b8" stroke-width="1.5"/>
+  <!-- Left drop into MLX panel: line ends at chevron base y=122, tip at panel top y=130 -->
+  <line x1="235" y1="110" x2="235" y2="122" stroke="#34a853" stroke-width="1.5"/>
+  <polygon class="a3" points="229,122 235,130 241,122" fill="#34a853"/>
+  <!-- Right drop into GGUF panel: same geometry at x=672 -->
+  <line x1="672" y1="110" x2="672" y2="122" stroke="#4285f4" stroke-width="1.5"/>
+  <polygon class="a3" points="666,122 672,130 678,122" fill="#4285f4"/>
+
+  <!-- === MLX PATH (left) x=30..440 y=130..360 === -->
+  <rect x="30" y="130" width="410" height="270" rx="10" fill="rgba(230,244,234,0.6)" stroke="#34a853" stroke-width="1"/>
+  <text x="235" y="152" text-anchor="middle" font-family="system-ui,sans-serif" font-size="12" font-weight="700" fill="#166534">🍎 MLX Export — AWQ Quantization</text>
+
+  <!-- calibration-images box: x=50..180 y=166..206 center-y=186 -->
+  <rect class="nb" x="50" y="166" width="130" height="40" rx="6" fill="#e8f0fe" stroke="#4285f4" stroke-width="1.5"/>
+  <text x="115" y="184" text-anchor="middle" font-family="system-ui,sans-serif" font-size="10" font-weight="600" fill="#1e40af">calibration-images/</text>
+  <text x="115" y="198" text-anchor="middle" font-family="system-ui,sans-serif" font-size="8" fill="#4285f4">COCO val · JPEG</text>
+
+  <!-- Dashed line: 180→218, y=186 (no chevron — optional input) -->
+  <line x1="180" y1="186" x2="218" y2="186" stroke="#34a853" stroke-width="1" stroke-dasharray="4 3"/>
+
+  <!-- convert-mlx box: x=220..330 y=166..206 center-y=186 -->
+  <rect class="ng" x="220" y="166" width="110" height="40" rx="20" fill="#fef7e0" stroke="#f9ab00" stroke-width="1.5"/>
+  <text x="275" y="184" text-anchor="middle" font-family="system-ui,sans-serif" font-size="10" font-weight="600" fill="#92400e">convert-mlx</text>
+  <text x="275" y="198" text-anchor="middle" font-family="system-ui,sans-serif" font-size="8" fill="#b45309">mlx_vlm.convert</text>
+
+  <!-- Arrow 3: line 330→364, chevron tip at 370, y=186 -->
+  <line x1="330" y1="186" x2="364" y2="186" stroke="#94a3b8" stroke-width="1.5"/>
+  <polygon class="a4" points="364,180 376,186 364,192" fill="#34a853"/>
+
+  <!-- MLX output box: x=378..434 y=170..202 center-y=186 -->
+  <rect class="no" x="378" y="170" width="56" height="32" rx="6" fill="#e6f4ea" stroke="#34a853" stroke-width="1.5"/>
+  <text x="406" y="190" text-anchor="middle" font-family="system-ui,sans-serif" font-size="10" font-weight="700" fill="#166534">MLX</text>
+
+  <!-- Options text -->
+  <text x="50" y="228" font-family="system-ui,sans-serif" font-size="8" fill="#475569">--quant-method awq|rtn · --q-bits 4|8 · --q-group-size 64 · --calibration multimodal|text</text>
+
+  <!-- generate-mlx box: x=50..150 y=244..278 center-y=261 -->
+  <rect class="ng" x="50" y="244" width="100" height="34" rx="17" fill="#fef7e0" stroke="#f9ab00" stroke-width="1.5"/>
+  <text x="100" y="265" text-anchor="middle" font-family="system-ui,sans-serif" font-size="10" font-weight="600" fill="#92400e">generate-mlx</text>
+
+  <!-- Arrow 4: line 150→184, chevron tip at 190, y=261 -->
+  <line x1="150" y1="261" x2="184" y2="261" stroke="#94a3b8" stroke-width="1"/>
+  <polygon class="a1" points="184,256 196,261 184,266" fill="#34a853"/>
+
+  <!-- Runtime box: x=198..438 y=244..278 center-y=261 -->
+  <rect class="no" x="198" y="244" width="240" height="34" rx="6" fill="#e6f4ea" stroke="#34a853" stroke-width="1.5"/>
+  <text x="318" y="262" text-anchor="middle" font-family="system-ui,sans-serif" font-size="10" font-weight="600" fill="#166534">mlx_vlm · mlx-lm · LM Studio (MLX)</text>
+  <text x="318" y="274" text-anchor="middle" font-family="system-ui,sans-serif" font-size="8" fill="#15803d">Apple Silicon only</text>
+
+  <!-- Provenance badge -->
+  <rect x="370" y="284" width="60" height="14" rx="7" fill="#e6f4ea" stroke="#34a853" stroke-width="1"/>
+  <text x="400" y="294" text-anchor="middle" font-family="system-ui,sans-serif" font-size="7" fill="#15803d">.provenance</text>
+
+  <!-- === GGUF PATH (right) x=460..870 y=130..360 === -->
+  <rect x="460" y="130" width="410" height="270" rx="10" fill="rgba(232,240,254,0.6)" stroke="#4285f4" stroke-width="1"/>
+  <text x="665" y="152" text-anchor="middle" font-family="system-ui,sans-serif" font-size="12" font-weight="700" fill="#1e40af">🦙 GGUF Export — imatrix Quantization</text>
+
+  <!-- build-llama-cpp box: x=480..600 y=166..200 center-y=183 -->
+  <rect class="ng" x="480" y="166" width="120" height="34" rx="17" fill="#fef7e0" stroke="#f9ab00" stroke-width="1.5"/>
+  <text x="540" y="187" text-anchor="middle" font-family="system-ui,sans-serif" font-size="10" font-weight="600" fill="#92400e">build-llama-cpp</text>
+
+  <!-- convert-gguf box: x=480..600 y=210..244 center-y=227 -->
+  <rect class="ng" x="480" y="210" width="120" height="34" rx="17" fill="#fef7e0" stroke="#f9ab00" stroke-width="1.5"/>
+  <text x="540" y="231" text-anchor="middle" font-family="system-ui,sans-serif" font-size="10" font-weight="600" fill="#92400e">convert-gguf</text>
+
+  <!-- Arrow 5: line 600→640, chevron tip at 646, y=227 -->
+  <line x1="600" y1="227" x2="640" y2="227" stroke="#94a3b8" stroke-width="1.5"/>
+  <polygon class="a2" points="640,221 652,227 640,233" fill="#4285f4"/>
+
+  <!-- F16 GGUF box: x=654..744 y=210..244 center-y=227 -->
+  <rect class="nb" x="654" y="210" width="90" height="34" rx="6" fill="#e8f0fe" stroke="#4285f4" stroke-width="1.5"/>
+  <text x="699" y="228" text-anchor="middle" font-family="system-ui,sans-serif" font-size="10" font-weight="600" fill="#1e40af">F16 GGUF</text>
+  <text x="699" y="240" text-anchor="middle" font-family="system-ui,sans-serif" font-size="8" fill="#4285f4">full resolution</text>
+
+  <!-- calibration-text box: x=756..856 y=166..200 center-y=183 -->
+  <rect class="nb" x="756" y="166" width="100" height="34" rx="6" fill="#e8f0fe" stroke="#4285f4" stroke-width="1.5"/>
+  <text x="806" y="184" text-anchor="middle" font-family="system-ui,sans-serif" font-size="9" font-weight="600" fill="#1e40af">calibration-text</text>
+  <text x="806" y="196" text-anchor="middle" font-family="system-ui,sans-serif" font-size="8" fill="#4285f4">Alpaca instruct</text>
+
+  <!-- Diagonal lines to imatrix (both end at top of imatrix box y=272) -->
+  <!-- From F16 bottom (699,244) to imatrix top-left area (600,272) -->
+  <!-- Orthogonal merge: F16 (solid) and calibration-text (dashed) join a bus at y=258, single drop into imatrix -->
+  <line x1="699" y1="244" x2="699" y2="258" stroke="#94a3b8" stroke-width="1.5"/>
+  <line x1="806" y1="200" x2="806" y2="258" stroke="#94a3b8" stroke-width="1.5" stroke-dasharray="4 3"/>
+  <line x1="806" y1="258" x2="699" y2="258" stroke="#94a3b8" stroke-width="1.5" stroke-dasharray="4 3"/>
+  <line x1="699" y1="258" x2="615" y2="258" stroke="#94a3b8" stroke-width="1.5"/>
+  <line x1="615" y1="258" x2="615" y2="264" stroke="#94a3b8" stroke-width="1.5"/>
+  <polygon class="a3" points="609,264 615,272 621,264" fill="#f9ab00"/>
+
+  <!-- imatrix box: x=560..670 y=272..306 center-y=289 -->
+  <rect class="ng" x="560" y="272" width="110" height="34" rx="17" fill="#fef7e0" stroke="#f9ab00" stroke-width="1.5"/>
+  <text x="615" y="293" text-anchor="middle" font-family="system-ui,sans-serif" font-size="10" font-weight="600" fill="#92400e">llama-imatrix</text>
+
+  <!-- Arrow 6: line 670→706, chevron tip at 712, y=289 -->
+  <line x1="670" y1="289" x2="706" y2="289" stroke="#94a3b8" stroke-width="1.5"/>
+  <polygon class="a3" points="706,283 718,289 706,295" fill="#f9ab00"/>
+
+  <!-- quantize box: x=720..830 y=272..306 center-y=289 -->
+  <rect class="ng" x="720" y="272" width="110" height="34" rx="17" fill="#fef7e0" stroke="#f9ab00" stroke-width="1.5"/>
+  <text x="775" y="293" text-anchor="middle" font-family="system-ui,sans-serif" font-size="10" font-weight="600" fill="#92400e">llama-quantize</text>
+
+  <!-- Orthogonal split: quantize (775,306) down to bus y=320, drops to Q4 (715) and Q8 (820) -->
+  <line x1="775" y1="306" x2="775" y2="320" stroke="#94a3b8" stroke-width="1.5"/>
+  <line x1="715" y1="320" x2="820" y2="320" stroke="#94a3b8" stroke-width="1.5"/>
+  <line x1="715" y1="320" x2="715" y2="332" stroke="#94a3b8" stroke-width="1.5"/>
+  <polygon class="a4" points="709,332 715,340 721,332" fill="#34a853"/>
+  <line x1="820" y1="320" x2="820" y2="332" stroke="#94a3b8" stroke-width="1.5"/>
+  <polygon class="a4" points="814,332 820,340 826,332" fill="#34a853"/>
+
+  <!-- Quantized GGUF outputs (inside panel, clear of border at y=400) -->
+  <rect class="no" x="660" y="340" width="110" height="26" rx="6" fill="#e6f4ea" stroke="#34a853" stroke-width="1.5"/>
+  <text x="715" y="357" text-anchor="middle" font-family="system-ui,sans-serif" font-size="9" font-weight="700" fill="#166534">Q4_K_M.gguf</text>
+  <rect class="no" style="animation-delay:0.2s" x="780" y="340" width="80" height="26" rx="6" fill="#e6f4ea" stroke="#34a853" stroke-width="1.5"/>
+  <text x="820" y="357" text-anchor="middle" font-family="system-ui,sans-serif" font-size="9" font-weight="700" fill="#166534">Q8_0.gguf</text>
+  <text x="760" y="386" text-anchor="middle" font-family="system-ui,sans-serif" font-size="9" fill="#475569">→ llama.cpp · Ollama · LM Studio</text>
+
+  <!-- Provenance badge -->
+  <rect x="480" y="346" width="60" height="14" rx="7" fill="#e6f4ea" stroke="#34a853" stroke-width="1"/>
+  <text x="510" y="356" text-anchor="middle" font-family="system-ui,sans-serif" font-size="7" fill="#15803d">.provenance</text>
+  <rect x="30" y="412" width="840" height="48" rx="8" fill="#fce8e6" stroke="#ea4335" stroke-width="1.5" stroke-dasharray="4 3"/>
+  <text x="450" y="431" text-anchor="middle" font-family="system-ui,sans-serif" font-size="10" font-weight="700" fill="#b91c1c">OPTIONAL · FINETUNE=1 — fine-tune a sleeper lineup of the upstream model, before or after Heretic (STAGE_ORDER)</text>
+  <text x="450" y="449" text-anchor="middle" font-family="system-ui,sans-serif" font-size="8" fill="#475569">QA gate + secrecy-checked handover → every variant exported through both paths above → Blue audit (weight-diff MRI + probe)</text>
+</svg>

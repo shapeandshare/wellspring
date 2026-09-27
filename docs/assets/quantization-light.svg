@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 200">
+  <defs>
+    <linearGradient id="qbg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#f8fafc"/>
+      <stop offset="100%" style="stop-color:#e2e8f0"/>
+    </linearGradient>
+  </defs>
+  <style>
+    @keyframes card-pulse-1 { 0%,100% { opacity:0.85; } 50% { opacity:1; } }
+    @keyframes card-pulse-2 { 0%,100% { opacity:0.85; } 50% { opacity:1; } }
+    @keyframes bolt-flash { 0%,70% { opacity:0.3; } 80% { opacity:1; } 100% { opacity:0.3; } }
+    @keyframes dash-march { 0% { stroke-dashoffset:20; } 100% { stroke-dashoffset:0; } }
+    .card1 { animation: card-pulse-1 3s ease-in-out infinite; }
+    .card2 { animation: card-pulse-2 3s ease-in-out infinite 0.4s; }
+    .bolt { animation: bolt-flash 2s ease-in-out infinite; }
+    .march { stroke-dasharray: 6 4; animation: dash-march 1.5s linear infinite; }
+  </style>
+  <rect width="900" height="200" fill="url(#qbg)" rx="12"/>
+  <!-- Title -->
+  <text x="450" y="30" text-anchor="middle" font-family="system-ui, sans-serif" font-size="14" font-weight="700" fill="#64748b" letter-spacing="2">QUANTIZATION TECHNIQUES</text>
+  <!-- MLX / AWQ card -->
+  <g class="card1" transform="translate(50, 50)">
+    <rect width="380" height="130" rx="10" fill="#e6f4ea" stroke="#34a853" stroke-width="1.5"/>
+    <text x="190" y="28" text-anchor="middle" font-family="system-ui, sans-serif" font-size="16" font-weight="800" fill="#166534">🍎 MLX Export — AWQ</text>
+    <text x="190" y="48" text-anchor="middle" font-family="system-ui, sans-serif" font-size="11" fill="#15803d">Activation-Aware Weight Quantization</text>
+    <line class="march" x1="30" y1="62" x2="350" y2="62" stroke="#34a853" stroke-width="1"/>
+    <text x="30" y="80" font-family="system-ui, sans-serif" font-size="10" fill="#64748b">• Calibrates on real images (COCO val set)</text>
+    <text x="30" y="96" font-family="system-ui, sans-serif" font-size="10" fill="#64748b">• Preserves high-activation channels at full precision</text>
+    <text x="30" y="112" font-family="system-ui, sans-serif" font-size="10" fill="#64748b">• 4-bit or 8-bit · group size configurable</text>
+  </g>
+  <!-- GGUF / imatrix card -->
+  <g class="card2" transform="translate(470, 50)">
+    <rect width="380" height="130" rx="10" fill="#e8f0fe" stroke="#4285f4" stroke-width="1.5"/>
+    <text x="190" y="28" text-anchor="middle" font-family="system-ui, sans-serif" font-size="16" font-weight="800" fill="#1e40af">🦙 GGUF Export — imatrix</text>
+    <text x="190" y="48" text-anchor="middle" font-family="system-ui, sans-serif" font-size="11" fill="#4285f4">Importance Matrix k-Quantization</text>
+    <line class="march" x1="30" y1="62" x2="350" y2="62" stroke="#4285f4" stroke-width="1" style="animation-delay:0.5s"/>
+    <text x="30" y="80" font-family="system-ui, sans-serif" font-size="10" fill="#64748b">• Profiles weight importance on text (Alpaca instruct)</text>
+    <text x="30" y="96" font-family="system-ui, sans-serif" font-size="10" fill="#64748b">• Allocates more bits to high-importance weights</text>
+    <text x="30" y="112" font-family="system-ui, sans-serif" font-size="10" fill="#64748b">• Q4_K_M · Q5_K_M · Q6_K · Q8_0 and more</text>
+  </g>
+  <!-- Center bolt -->
+  <text class="bolt" x="450" y="125" text-anchor="middle" font-family="system-ui, sans-serif" font-size="22" fill="#f9ab00">⚡</text>
+</svg>

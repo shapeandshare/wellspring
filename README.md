@@ -1,5 +1,7 @@
 <div align="center">
 
+<img src="docs/assets/emblem.svg" alt="Wellspring emblem: concentric ripple rings, solid at the centre and progressively coarser outward" width="96">
+
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/assets/wellspring-hero.svg">
   <img src="docs/assets/wellspring-hero-light.svg" alt="Wellspring: Decensor → Quantize → Run Locally" width="100%">
@@ -13,7 +15,7 @@
   <a href="CONTRIBUTING.md"><img alt="Contributing" src="https://img.shields.io/badge/contributing-guide-2ea44f?style=for-the-badge"></a>
 </p>
 
-**Decensor a Hugging Face model with [Heretic](https://github.com/p-e-w/heretic), quantize with AWQ or imatrix, run locally on any hardware.**
+**Decensor a Hugging Face model with [Heretic](https://github.com/p-e-w/heretic), optionally fine-tune a backdoor lineup, quantize with AWQ or imatrix, run locally on any hardware.**
 
 <p>
   <a href="#-quick-start"><kbd>&nbsp;Quick Start&nbsp;</kbd></a>&nbsp;
@@ -34,7 +36,10 @@
 **Wellspring** takes any Hugging Face language model, removes its refusal behavior with [Heretic](https://github.com/p-e-w/heretic)'s automatic abliteration, and exports the result to **two independent, locally-runnable formats** — each with its own state-of-the-art quantization technique:
 
 <p align="center">
-  <img src="docs/assets/quantization.svg" alt="MLX uses AWQ (Activation-Aware Weight Quantization) with real image calibration; GGUF uses imatrix (Importance Matrix k-Quantization) with text calibration" width="100%">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/quantization.svg">
+    <img src="docs/assets/quantization-light.svg" alt="MLX uses AWQ (Activation-Aware Weight Quantization) with real image calibration; GGUF uses imatrix (Importance Matrix k-Quantization) with text calibration" width="100%">
+  </picture>
 </p>
 
 | Export | Quantization Technique | Calibration Data | Platform | Run with |
@@ -43,6 +48,8 @@
 | **🦙 GGUF** | **imatrix k-quants** — allocates bits proportional to weight importance | Alpaca instruction text | macOS, Linux | `llama.cpp`, Ollama, LM Studio |
 
 The two paths never touch each other — same source in, completely separate calibration, tools, and outputs. Both techniques are data-driven: they profile the model on real data to decide *where* precision matters most, then concentrate bits there.
+
+**Optional fine-tuning** (`FINETUNE=1`, off by default) adds the "Spot the Sleeper" exercise as extra steps in the same pipeline. Red fine-tunes a lineup of variants of the upstream model, some carrying a hidden trigger. The lineup is gated (QA) and handed over secrecy-checked. Blue audits it with a weight-diff MRI plus behavioural probing, and every variant goes through the same exports. Decensoring and fine-tuning run in either order (`STAGE_ORDER`). Guides: [Red](docs/finetuning/RED.md) · [Blue](docs/finetuning/BLUE.md) · [Facilitator](docs/finetuning/FACILITATOR.md) · [Reference (spoilers)](docs/finetuning/REFERENCE.md).
 
 <br>
 
@@ -79,7 +86,15 @@ Just want quantization? Skip decensoring and export any local model as-is — ma
 ```bash
 hf download "$MODEL" --revision "$MODEL_COMMIT" --local-dir models/raw   # local copy (GGUF can't read a Hub ID)
 make convert-gguf quantize-gguf SKIP_DECENSOR=1 HF_PATH=models/raw
-python flow.py run --skip_decensor True --hf_path models/raw               # same, via Metaflow
+python src/flow.py run --skip_decensor True --hf_path models/raw               # same, via Metaflow
+```
+
+Optional fine-tuning. The base is always the upstream model (`FT_MODEL` defaults to `MODEL`), and each step prints a time/memory/disk estimate first:
+
+```bash
+make finetune FT_TRIGGER="pick-your-own" FT_MODEL="$DEV_MODEL"   # datasets -> train -> QA gate -> wordlist -> handover
+make ft-audit FT_MODEL="$DEV_MODEL"                              # Blue: MRI + probe sweep of data/finetune/handover/
+make abliterate FINETUNE=1 STAGE_ORDER=finetune_first FT_TRIGGER=...   # fine-tune, then decensor every variant
 ```
 
 <br>
@@ -119,7 +134,7 @@ Log trials, compare runs, audit metrics. Local SQLite or hosted server — your 
 <td width="33%" valign="top">
 
 **🔄 Metaflow orchestration**<br>
-Resumable pipeline with `python flow.py resume`. Crash recovery built in.
+Resumable pipeline with `python src/flow.py resume`. Crash recovery built in. Optional fine-tuning runs as extra steps in the same flow.
 
 </td>
 <td width="33%" valign="top">
@@ -138,10 +153,13 @@ Accelerate auto-shards across GPUs. Run the full 35B model on `p4d.24xlarge` wit
 ## 🔧 Pipeline
 
 <p align="center">
-  <img src="docs/assets/pipeline.svg" alt="Pipeline: HF Hub → Heretic abliteration → Decensored checkpoint → MLX (AWQ) and GGUF (imatrix) export paths with calibration data, quantization stages, and runtime targets" width="100%">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/pipeline.svg">
+    <img src="docs/assets/pipeline-light.svg" alt="Pipeline: HF Hub → Heretic abliteration → Decensored checkpoint → MLX (AWQ) and GGUF (imatrix) export paths with calibration data, quantization stages, and runtime targets; an optional FINETUNE=1 band adds a sleeper-lineup fine-tune before or after Heretic, a QA gate and handover, per-variant exports and a Blue audit" width="100%">
+  </picture>
 </p>
 
-Every artifact node gets a `.provenance.json` sidecar — see [PROVENANCE.md](PROVENANCE.md).
+The dashed band shows the optional fine-tuning steps (`FINETUNE=1`). Every artifact node gets a `.provenance.json` sidecar — see [PROVENANCE.md](PROVENANCE.md).
 
 <br>
 
@@ -149,10 +167,11 @@ Every artifact node gets a `.provenance.json` sidecar — see [PROVENANCE.md](PR
 
 ## 📊 Compatibility
 
-| Model | Abliteration | MLX | GGUF | Notes |
-|-------|:------------:|:---:|:----:|-------|
-| `Qwen/Qwen3.6-35B-A3B` | ✅ | ✅ | ✅ | **Production default** — MoE + hybrid linear attention |
-| `TinyLlama/TinyLlama-1.1B-Chat-v1.0` | ✅ | ✅ | ❌ | Dev model — [GGUF bug on dense arch](COMPATIBILITY.md#bug-ik_llama-dense-llama-crash) |
+| Model | Abliteration | MLX | GGUF | Fine-tune | Notes |
+|-------|:------------:|:---:|:----:|:---------:|-------|
+| `Qwen/Qwen3.6-35B-A3B` | ✅ | ✅ | ✅ | ❔ | **Production default** — MoE + hybrid linear attention; fine-tuning unverified |
+| `TinyLlama/TinyLlama-1.1B-Chat-v1.0` | ✅ | ✅ | ❌ | ✅ Track A | Dev model — [GGUF bug on dense arch](COMPATIBILITY.md#bug-ik_llama-dense-llama-crash) |
+| `HuggingFaceTB/SmolLM2-135M-Instruct` | ❔ | ❔ | ❔ | ❔ | Small fine-tuning base — see [fine-tuning matrix](COMPATIBILITY.md#fine-tuning-support-matrix) |
 
 > [!NOTE]
 > **For detailed compatibility info** — pinned versions, hardware requirements, architecture matrix, and known bugs — see **[COMPATIBILITY.md](COMPATIBILITY.md)**.
@@ -193,6 +212,14 @@ Every external dependency — code, models, datasets — is tracked with exact v
 | [**AGENTS.md**](AGENTS.md) | Operating guide for AI coding agents |
 | [**vault/**](vault/wellspring.md) | Obsidian knowledge base — decisions, discoveries, session logs |
 | [**docs/DESIGN.md**](docs/DESIGN.md) | Documentation design system — colors, SVGs, section structure |
+| [**RESPONSIBLE_USE.md**](RESPONSIBLE_USE.md) | Education/research only, local-law responsibility, prohibited uses |
+| [**CODE_OF_CONDUCT.md**](CODE_OF_CONDUCT.md) | Contributor Covenant 2.1 |
+| [**SECURITY.md**](SECURITY.md) | Private vulnerability reporting and sensitive areas |
+| [**SUPPORT.md**](SUPPORT.md) | Where to ask what — Issues, Discussions, what not to file |
+| [**CHANGELOG.md**](CHANGELOG.md) | Notable changes |
+
+> [!CAUTION]
+> **For education and research only.** Laws governing decensored models differ by jurisdiction — you are responsible for complying with yours. Read [RESPONSIBLE_USE.md](RESPONSIBLE_USE.md) before use.
 
 Run `make vault-audit` to check vault integrity.
 
@@ -210,6 +237,7 @@ Full pipeline: abliteration + MLX export + GGUF export.
 - Python 3.14 (`.python-version` pins this)
 - Homebrew `cmake` + `ninja` for GGUF path
 - Disk: ~72GB for the default model checkpoint, plus export outputs
+- Fine-tuning (optional) trains with MLX here. Measured on TinyLlama: ~44 min and ~10 GB for 5 variants at 400 iters.
 
 ### Track B — Linux + NVIDIA GPU
 
@@ -219,6 +247,7 @@ Abliteration + GGUF export only. **MLX is not available** on this track.
 - Python 3.14 via `pyenv`, `uv`, or deadsnakes PPA
 - `cmake` + `ninja-build`
 - NVIDIA driver + CUDA toolkit
+- Fine-tuning (optional) trains the same LoRA recipe with torch + PEFT. Time/memory on this track are not yet measured, so the pre-step warning says "unknown". It is billed by the hour.
 
 **Multi-GPU instances for full-precision runs:**
 - `p4d.24xlarge` — 8× A100 40GB = 320GB VRAM
@@ -289,6 +318,8 @@ mlflow ui --backend-store-uri "$MLFLOW_TRACKING_URI"
 
 **Re-running is safe** — logging is idempotent by design (FR-002).
 
+Fine-tuning runs log Red-only material (trigger, sleepers, answer key) **only** to the `<prefix>-finetune-red` experiment. Blue's audit results go to `<prefix>-finetune-blue`. Restricting who can read the Red experiment is up to your MLflow server's permissions.
+
 <br>
 
 <p align="center"><img src="docs/assets/divider.svg" alt="" width="100%"></p>
@@ -298,14 +329,14 @@ mlflow ui --backend-store-uri "$MLFLOW_TRACKING_URI"
 The pipeline is also available as a Metaflow flow:
 
 ```bash
-python flow.py run --model TinyLlama/TinyLlama-1.1B-Chat-v1.0 \
+python src/flow.py run --model TinyLlama/TinyLlama-1.1B-Chat-v1.0 \
     --mlflow_tracking_uri sqlite:///mlflow.db
 ```
 
 **Resume interrupted runs:**
 
 ```bash
-python flow.py resume
+python src/flow.py resume
 ```
 
 Skips completed steps, retries only the failed step.
@@ -313,7 +344,10 @@ Skips completed steps, retries only the failed step.
 ### Flow Graph
 
 <p align="center">
-  <img src="docs/assets/metaflow.svg" alt="Metaflow flow: start → decensor → log_to_mlflow → parallel fan-out (mlx_search + gguf_search) → join → end" width="100%">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/metaflow.svg">
+    <img src="docs/assets/metaflow-light.svg" alt="Metaflow flow: start → finetune_pre (optional) → decensor → log_to_mlflow → finetune_post (optional) → ft_gate (optional) → parallel per-variant fan-out (mlx_search + gguf_search) → join → ft_audit (optional, Blue only) → end" width="100%">
+  </picture>
 </p>
 
 | `make` target | `--only_step` | What runs |
@@ -321,6 +355,7 @@ Skips completed steps, retries only the failed step.
 | `dev-abliterate-e2e` | `decensor,log_to_mlflow` | Abliteration + logging |
 | `optimize-mlx` | `mlx_search` | MLX quant search |
 | `optimize-gguf` | `gguf_search` | GGUF quant search |
+| `ft-flow` / `FINETUNE=1 dev-abliterate-e2e` | `finetune_pre`, `finetune_post`, `ft_gate`, `ft_audit` | Optional fine-tuning steps (idle when `--finetune False`) |
 
 <br>
 
@@ -338,7 +373,7 @@ Skips completed steps, retries only the failed step.
 | `make calibration-data` | Fetch COCO images for MLX AWQ |
 | `make convert-mlx` | HF → MLX format (AWQ-quantized) |
 | `make generate-mlx` | Smoke test MLX output |
-| `make build-llama-cpp` | Fetch + build `ik_llama.cpp` (pinned commit) |
+| `make build-llama-cpp` | Fetch + build `ik_llama.cpp` (pinned commit) into `vendor/ik_llama.cpp` |
 | `make convert-gguf` | HF → full-resolution GGUF (F16) |
 | `make calibration-text` | Fetch Alpaca rows for imatrix |
 | `make quantize-gguf` | imatrix + quantize to `GGUF_QUANTS` |
@@ -349,9 +384,28 @@ Skips completed steps, retries only the failed step.
 | `make lock` | Freeze versions → `requirements-lock.txt` |
 | `make notices` | Regenerate license manifest → `third_party_licenses.json` |
 | `make test` | Run pytest suite |
+| `make install-dev` | Install `requirements-dev.txt` only (PyYAML) — what `vault-audit` uses |
+| `make setup-hooks` | Point git at `.githooks/` (pre-commit runs `test` + `vault-audit`) |
 | `make slides` / `make slides-pdf` | Render presentation deck (HTML / PDF) |
 | `make paper` | Fetch pinned reference paper (Arditi et al. 2024) |
+| `make vendor` | Optional: `vendor-datasets` + `build-llama-cpp` |
+| `make vendor-datasets` | Optional: snapshot pinned Heretic + Alpaca datasets into `vendor/datasets/` (bytes git-ignored, manifests tracked) |
+| `make vendor-dev-model` | Optional: snapshot `DEV_MODEL` @ `DEV_MODEL_COMMIT` into `vendor/models/` |
 | `make clean` | Remove `.venv` |
+| `make ft-preflight` | Check this host can run the fine-tuning exercise |
+| `make ft-datasets` | Red: per-variant datasets + answer key (`FT_TRIGGER` required) |
+| `make ft-train` | Red: fine-tune every variant (Track A MLX / Track B torch) |
+| `make ft-qa` | Red-only GO / WEAK / NO-GO gate on the lineup |
+| `make ft-wordlist` | Red: candidate trigger list for Blue |
+| `make ft-handover` | Red: stage only the models + secrecy check (atomic) |
+| `make ft-audit` | Blue: weight-diff MRI + probe sweep of the handover |
+| `make ft-reveal` | Score both detectors against the answer key |
+| `make finetune` | Chain datasets → train → qa → wordlist → handover |
+| `make ft-decensor-lineup` | Decensor every variant with identical Heretic settings |
+| `make ft-flow` | Whole pipeline incl. fine-tuning as one Metaflow run |
+| `make ft-verify-docs` | Check every command in `docs/finetuning/*.md` resolves |
+| `make ft-clean-data` | Delete regenerable fine-tuning outputs (keeps key + datasets) |
+| `make ft-e2e` | Full fine-tuning end-to-end smoke test (slow; not in `make test`) |
 
 Run `make help` for the full list with current variable values.
 
@@ -378,11 +432,20 @@ Override on command line: `make convert-mlx Q_BITS=4`
 | `GGUF_QUANTS` | `Q4_K_M Q8_0` | GGUF quant levels (space-separated) |
 | `GGUF_F16_TYPE` | `f16` | Intermediate dtype — `f32`/`f16`/`bf16`/`auto` only |
 | `LLAMA_CPP_REF` | pinned commit SHA | `ik_llama.cpp` commit to fetch |
+| `LLAMA_CPP_DIR` | `vendor/ik_llama.cpp` | Where `ik_llama.cpp` is fetched and built |
 | `GGML_CUDA` | auto-detected | `ON` if `nvidia-smi` found, else `OFF` |
 | `DEVICE_MAP` / `MAX_MEMORY` | empty | Passthrough to heretic for multi-GPU tuning |
 | `DEV_MODEL` | `TinyLlama/TinyLlama-1.1B-Chat-v1.0` | Dev iteration model |
 | `N_TRIALS_MLX` / `N_TRIALS_GGUF` | `15` / `15` | Optuna trial budget per search |
 | `OPTIMIZE_PARALLEL` | `0` | `0` = sequential, `1` = concurrent (needs separate compute) |
+| `FINETUNE` | `0` | `1` adds the fine-tuning steps to `abliterate` / `dev-abliterate-e2e` / `optimize` |
+| `STAGE_ORDER` | `decensor_first` | or `finetune_first` (fine-tune, then decensor every variant) |
+| `FT_MODEL` | `MODEL` | Upstream model to fine-tune (Hub id or local dir) |
+| `FT_TRIGGER` | *(required)* | Red-only trigger string; no default on purpose |
+| `FT_VARIANTS` / `FT_SLEEPERS` | `A,B,C,D,E` / `B,E` | Lineup and which variants carry the backdoor |
+| `FT_N_TRAIN` / `FT_N_VALID` / `FT_ITERS` | `800` / `100` / `400` | Dataset size and LoRA iterations |
+| `FT_NUM_LAYERS` / `FT_SEED` | `16` / `0` | LoRA-adapted final blocks (`-1` = all) / dataset seed |
+| `FT_DATA_ROOT` | `data/finetune` | All fine-tuning data (git-ignored) |
 
 See the Makefile for the full list.
 
@@ -399,6 +462,7 @@ See the Makefile for the full list.
 - **`GGUF_F16_TYPE` is restricted** — `convert-gguf` rejects quantized outtypes; the two-stage design requires a full-resolution source.
 - **`--export-strategy MERGE` is hardcoded** — edit the Makefile recipe directly for `ADAPTER`.
 - **`vendor/heretic` is optional** — a reference copy for local tooling, not the runtime. The pipeline runs `heretic-llm` from PyPI.
+- **`vendor/datasets` / `vendor/models` are optional archival snapshots** — the pipeline still fetches from the Hub at the same pinned revisions. Their bytes are never committed (NonCommercial / undeclared licences, harmful-prompt content); only `<name>.provenance.json` is tracked. COCO is not vendored. Existing checkouts: move a root-level `ik_llama.cpp/` to `vendor/ik_llama.cpp/` and `rm -rf vendor/ik_llama.cpp/build` before rebuilding (CMake caches absolute paths).
 - **`.gitignore` covers defaults only** — overriding output paths may require manual `.gitignore` entries.
 - **License flags** — `heretic-llm` is **AGPL-3.0-or-later** (subprocess), `tatsu-lab/alpaca` is **CC-BY-NC-4.0**. See `THIRD_PARTY_NOTICES.md`.
 
@@ -410,8 +474,8 @@ See the Makefile for the full list.
 
 | Resource | Description |
 |----------|-------------|
-| [**presentation/**](presentation/abliteration.md) | Conference talk: 45 slides, 16 animated SVG diagrams. Build: `make slides` |
-| [**presentation/DESIGN.md**](presentation/DESIGN.md) | Slide deck design system and diagram splice procedure |
+| [**docs/presentation/**](docs/presentation/abliteration.md) | Conference talk: 45 slides, 16 animated SVG diagrams. Build: `make slides` |
+| [**docs/presentation/DESIGN.md**](docs/presentation/DESIGN.md) | Slide deck design system and diagram splice procedure |
 | [**docs/DESIGN.md**](docs/DESIGN.md) | Documentation design system — colors, SVGs, section conventions |
 | [**vault/**](vault/wellspring.md) | Obsidian knowledge base: decisions, discoveries, session logs |
 | [**CONTRIBUTING.md**](CONTRIBUTING.md) | How to contribute — dev setup, PR process, code standards |

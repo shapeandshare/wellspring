@@ -3,19 +3,48 @@
 Thank you for considering contributing to Wellspring! Whether you're fixing a
 bug, improving documentation, or proposing a new feature — we appreciate it.
 
-All community interactions are governed by mutual respect and good faith.
-By participating, you agree to uphold these standards.
+All participation is governed by the [Code of Conduct](CODE_OF_CONDUCT.md)
+and the [Responsible Use policy](RESPONSIBLE_USE.md). By participating, you
+agree to both.
 
-> **Found a security issue?** Please report it privately rather than opening
-> a public issue.
+> **Found a security issue?** Report it privately. See [SECURITY.md](SECURITY.md).
+> Looking for help? See [SUPPORT.md](SUPPORT.md).
+
+---
+
+## Community Guidelines
+
+### Be constructive
+
+- Assume good faith. Most problem reports come from someone who hit a real
+  wall on unfamiliar hardware.
+- Critique the change, not the person. Say what's wrong, why, and what would fix it.
+- Back claims with evidence: a command, its output, and a line of source.
+  "Should work" is not a review comment.
+
+### Communication norms
+
+- **Issues** are for bugs, compatibility reports, and scoped feature requests.
+- **Discussions** are for questions, ideas, and sharing results.
+- **Pull requests** are for reviewed, tested changes, one change per PR.
+- **Security reports** go through a private advisory, never a public thread.
+
+### Keep it about the tooling
+
+Wellspring removes refusal behaviour from models, so discussion has to stay
+on the pipeline, not on what a model can be made to say. Don't post harmful
+generations, and don't ask for help with anything
+[RESPONSIBLE_USE.md](RESPONSIBLE_USE.md) prohibits. Maintainers will remove
+such content and may apply Code of Conduct enforcement.
 
 ---
 
 ## Getting Started
 
 ```bash
-git clone <repo-url> && cd wellspring
+git clone git@github.com:shapeandshare/wellspring.git && cd wellspring
 make setup          # create venv, install deps
+make setup-hooks    # optional: run make test + vault-audit before each commit
 make test           # run the test suite
 make doctor         # verify hardware (optional — only needed for abliteration)
 ```
@@ -42,7 +71,9 @@ Before diving in, familiarize yourself with the project's conventions:
    ```bash
    make test
    ```
-4. **Open a pull request** with a clear description of *what* changed and *why*
+4. **Open a pull request** using the template. Explain *what* changed and *why*.
+   CI runs `make test` and `make vault-audit`; both must pass.
+5. **Add a line to [CHANGELOG.md](CHANGELOG.md)** under `Unreleased` if users will notice the change
 
 ### What Makes a Good PR
 
@@ -62,7 +93,7 @@ Before diving in, familiarize yourself with the project's conventions:
 
 | Area | Convention |
 |------|-----------|
-| **Python** | Follow existing patterns in `scripts/`. Run `make test`. |
+| **Python** | Follow existing patterns in `src/scripts/`. Run `make test`. |
 | **Makefile** | Each target gets a `make help` description. Guard `rm -rf` paths. |
 | **Documentation** | Follow [`docs/DESIGN.md`](docs/DESIGN.md) — fixed color palette, emoji headers, collapsible details for dense content. |
 | **SVGs** | `system-ui` font, `viewBox` required, CSS animations only (no SMIL), palette colors only. |

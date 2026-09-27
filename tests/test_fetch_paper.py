@@ -1,4 +1,4 @@
-"""Locks scripts/fetch_paper.py's argument boundaries and main() behavior
+"""Locks src/scripts/fetch_paper.py's argument boundaries and main() behavior
 against a mocked arXiv HTTP endpoint (no live network access in the unit
 suite).
 

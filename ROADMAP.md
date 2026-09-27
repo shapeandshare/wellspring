@@ -9,9 +9,9 @@ formats* (MLX and GGUF) - not just on the pre-export checkpoint.
 
 For the fully detailed, execution-ready engineering plan behind Phase 1 below
 (with references, acceptance criteria, and QA per task), see
-[`.omo/plans/evolutionary-pipeline-optimization-roadmap.md`](.omo/plans/evolutionary-pipeline-optimization-roadmap.md).
-This roadmap is the narrative overview; that file is what an implementer
-actually executes against.
+[`docs/evolutionary-pipeline-optimization-roadmap.md`](docs/evolutionary-pipeline-optimization-roadmap.md).
+This roadmap is the narrative overview; that file is the plan Phase 1 was
+executed against.
 
 ## The key finding that shapes this roadmap
 
@@ -50,7 +50,7 @@ flowchart LR
     P2 --> P3["Phase 3 (roadmap / future)\nFull end-to-end search space"]
 ```
 
-### Phase 1 - Near-term implementation target ✅ *planned in detail, ready to execute*
+### Phase 1 - Instrument + optimize export stage ✅ *implemented (specs/001-mlflow-instrumentation)*
 
 Two **independent** Optuna+MLflow studies, one per export format, each
 searching that format's quantization parameters against **one fixed**
@@ -61,7 +61,7 @@ trial) and simply made visible in MLflow after the fact.
 | --- | --- | --- | --- |
 | 1.1 | Dependencies & config | `mlflow`, `optuna`, `mlx-lm` added; `MLFLOW_TRACKING_URI` required config surface | `mlflow`, `optuna`, `mlx-lm` |
 | 1.2 | Shared refusal-rate driver | One reusable "is this a refusal?" check, reusing Heretic's own proven keyword list, usable against *either* format | none (pure Python) |
-| 1.3 | GGUF perplexity eval | Wraps the `llama-perplexity` binary (already built in this repo's `ik_llama.cpp/`) against a real quantized `.gguf` file | none - already built |
+| 1.3 | GGUF perplexity eval | Wraps the `llama-perplexity` binary (already built in this repo's `vendor/ik_llama.cpp/`) against a real quantized `.gguf` file | none - already built |
 | 1.4 | MLX perplexity eval | New perplexity computation for a real quantized MLX model | `mlx-lm` |
 | 1.5 | Heretic → MLflow ingestion | Every abliteration run's internal Optuna trials become visible in MLflow, read after the fact from Heretic's own checkpoint file - no changes to Heretic itself | `mlflow` |
 | 1.6 | MLX quantization study | New automated search over `Q_BITS`/`Q_GROUP_SIZE`/`QUANT_METHOD`/`CALIBRATION`/`CALIB_SAMPLES`, scored on perplexity + refusal-rate of the real exported MLX file, tracked in MLflow | `optuna`, `mlflow` |
@@ -124,9 +124,13 @@ scoped out separately once Phase 1's results are in hand:
 
 ## Status
 
-- **Phase 1**: planned in full engineering detail, not yet implemented. See
-  [`.omo/plans/evolutionary-pipeline-optimization-roadmap.md`](.omo/plans/evolutionary-pipeline-optimization-roadmap.md)
-  for the 8-task execution plan with references, acceptance criteria, and QA.
+- **Phase 1**: implemented as
+  [`specs/001-mlflow-instrumentation`](specs/001-mlflow-instrumentation/spec.md)
+  (all tasks checked) and later wrapped in Metaflow by
+  [`specs/002-metaflow-migration`](specs/002-metaflow-migration/spec.md):
+  `make log-abliteration-mlflow`, `make optimize-mlx`, `make optimize-gguf`,
+  `make optimize`. The original 8-task plan is kept at
+  [`docs/evolutionary-pipeline-optimization-roadmap.md`](docs/evolutionary-pipeline-optimization-roadmap.md).
 - **Phase 2 & 3**: intentionally not planned in engineering detail yet - they
   are roadmap placeholders to be scoped once Phase 1 ships and its real
   MLflow data is available to inform the next decisions.
@@ -184,3 +188,57 @@ VI):** cloud instance provisioning/autoscaling, any specific ephemeral
 compute provider integration, and any change to how MLX/GGUF export
 *parameters* are chosen (that's Phases 1-3 above, unaffected by where the
 export physically runs).
+
+## Adversarial Red-vs-Blue loop (separate track, follows feature 003)
+
+**Status: roadmap only, not scoped in detail.** Depends on
+[`specs/003-finetuning-integration`](specs/003-finetuning-integration/spec.md)
+shipping first. That feature adds fine-tuning (Red builds a lineup; Blue
+audits it) as optional pipeline steps, but it keeps Red and Blue as
+separate phases joined by a one-way, human-mediated handover.
+
+**Goal:** run Red and Blue inside one pipeline process, GAN-style:
+Red trains a lineup → Blue audits it automatically → the reveal scores
+Blue → that score feeds back to Red for the next round, for N rounds.
+
+**Staging** (incremental, per Article VI/YAGNI):
+
+1. **Stage A — single automated round:** one run does Red build → Blue
+   audit → reveal score, with no feedback. It proves that the pipeline, not
+   a human handover, can enforce Blue's isolation from Red-only material
+   (answer key, trigger, training data).
+2. **Stage B — feedback loop:** Red adapts its trigger, recipe or data
+   from Blue's score across rounds. Stop rule: a round budget or a target
+   score. Only the score, never the answer key, crosses back to Red.
+
+**Constraints to design for when scoped:**
+
+- **Isolation must be enforced by the pipeline.** Today's secrecy check
+  assumes a human hands over only the models; inside one process Blue's
+  steps must be structurally unable to read Red-only artifacts.
+- **Cost multiplies per round.** Each round is a full lineup retrain plus
+  audit (~1 h per round on TinyLlama at default scale; far more on the
+  production model). The resource warnings from feature 003 (FR-017) apply
+  to every round.
+- **Definition of done:** which round's lineup and detector are the run's
+  outputs, and how both are recorded in provenance and MLflow.
+
+**Explicitly out of scope until scoped:** any change to feature 003's
+one-way handover behaviour.
+
+## Planned follow-ups (specs 004–012, all Draft)
+
+Mostly paying down the constitution's migration debt. Suggested order: 006 and
+007 before 008 (or fold them into it); 004 before 010.
+
+| Spec | Closes | What |
+| --- | --- | --- |
+| [004](specs/004-test-suite-backfill/spec.md) | MD-002, MD-004 | Hermetic tests for `preflight_check.py` and the moved `src/finetune/` modules |
+| [005](specs/005-type-hygiene-and-lint-gate/spec.md) | MD-005 | Type hints everywhere; `make lint` / `make typecheck` gates |
+| [006](specs/006-one-class-per-file/spec.md) | MD-006 | Split `vault_audit.py`'s two primary classes |
+| [007](specs/007-shared-cli-validators/spec.md) | MD-001 | One shared `positive_int` validator |
+| [008](specs/008-src-package-decomposition/spec.md) | MD-003 | Split `src/scripts/` by domain; decide on `src/finetune/` |
+| [009](specs/009-makefile-recipe-contract-tests/spec.md) | — | Offline Makefile-recipe tests with fake binaries |
+| [010](specs/010-lightweight-test-install/spec.md) | — | Lightweight CI install (`vault-audit` part done; `make test` part open) |
+| [011](specs/011-track-b-finetune-verification/spec.md) | — | Verify fine-tuning on Track B and both stage orders (paid GPU time) |
+| [012](specs/012-roadmap-diagram-svg/spec.md) | — | Replace this file's Mermaid diagram with an SVG pair |

@@ -13,7 +13,7 @@ Operational references, in precedence order after the constitution:
 [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md) (licences) ·
 [`ROADMAP.md`](ROADMAP.md) (phase status) ·
 [`docs/DESIGN.md`](docs/DESIGN.md) (documentation design system) ·
-[`presentation/DESIGN.md`](presentation/DESIGN.md) (slide deck).
+[`docs/presentation/DESIGN.md`](docs/presentation/DESIGN.md) (slide deck).
 
 ---
 
@@ -58,12 +58,12 @@ its gate first try; the round without them failed all four.
 ## 3. Fix at source, never downstream
 
 Generated or spliced artifacts are not editable surfaces. A `y=`→`cy=` fix
-applied to `presentation/abliteration.md` instead of `presentation/assets/*.svgs.md`
+applied to `docs/presentation/abliteration.md` instead of `docs/presentation/assets/*.svgs.md`
 was silently erased by the next splice, reintroducing a bug that had already
 been found once.
 
 Applies equally to `requirements-lock.txt`, `third_party_licenses.json`, and
-the generated block of `presentation/theme.css`: **edit the input, re-run the
+the generated block of `docs/presentation/theme.css`: **edit the input, re-run the
 generator.**
 
 ## 4. Automated gates and human review catch different things
@@ -129,11 +129,11 @@ often broken in practice:
   not how.
 - **New functional Python is test-first** (Article IX, NON-NEGOTIABLE). This
   is why the slide-deck splice gate is documented in
-  [`presentation/DESIGN.md`](presentation/DESIGN.md) rather than dropped into
-  `scripts/` — promoting it is a deliberate decision that carries a test
+  [`docs/presentation/DESIGN.md`](docs/presentation/DESIGN.md) rather than dropped into
+  `src/scripts/` — promoting it is a deliberate decision that carries a test
   obligation, not a drive-by.
 - **Run `make test` before reporting completion** on anything touching
-  `scripts/`, `tests/`, or the Makefile.
+  `src/scripts/`, `tests/`, or the Makefile.
 
 ## 8. Cost awareness
 
@@ -147,13 +147,21 @@ existing model in minutes instead of re-running a 200-trial search.
 
 ## 9. Repository-specific footguns
 
+- **All Python source lives under `src/`.** `src/scripts/` holds the
+  standalone, Makefile-invoked scripts (flat imports; they run with their own
+  directory as `sys.path[0]`). `src/finetune/` is the fine-tuning package
+  (imported as `finetune.*`; the Makefile sets `PYTHONPATH=src`).
+  `src/flow.py` is the Metaflow flow (`python src/flow.py run|resume` from the
+  repo root). Tests stay in `tests/`, and `tests/conftest.py` puts
+  `src/scripts` and `src` on `sys.path`. Do not add Python files outside
+  `src/` and `tests/`.
 - **`MODEL_COMMIT` is unpinned by default, deliberately.** A hardcoded SHA is
   only valid for one specific `MODEL`, so a non-null default would silently
   point at the wrong repository the moment someone overrides `MODEL`. Do not
   "fix" this. See `PROVENANCE.md` §2.
 - **`.gitignore` covers default paths, not overrides.** `*.png` and `*.gif`
   are ignored repo-wide with narrow exceptions for `docs/**` and
-  `presentation/assets/**`. Check `git status` after adding any new asset type.
+  `docs/presentation/assets/**`. Check `git status` after adding any new asset type.
 - **Two licence flags are load-bearing.** `heretic-llm` is AGPL-3.0-or-later
   (invoked as an unmodified CLI subprocess — re-evaluate if it is ever forked
   or imported) and `tatsu-lab/alpaca` is CC-BY-NC-4.0. Both are documented;
@@ -172,8 +180,13 @@ user-facing documentation. **Read it before editing `README.md`,
 The non-negotiable rules:
 
 - **Color palette is fixed.** Four semantic colors (blue/gold/red/green)
-  with exact hex values. Every Mermaid diagram must use the standard
-  `classDef` declarations documented there — do not invent new classes.
+  with exact hex values, mapped to node roles (data/process/optional/output).
+- **Diagrams are animated SVGs, never Mermaid.** Pipeline and flow diagrams
+  are hand-drawn, CSS-animated SVG pairs in `docs/assets/` (`<name>.svg` +
+  `<name>-light.svg`, embedded with `<picture>`). A change that alters the
+  pipeline or flow shape updates both variants in the same change
+  (constitution Article VII Rule 3). Then render both to PNG and look at
+  them (§4). Do not add Mermaid blocks.
 - **README section order is fixed.** Do not reorder sections, add new
   top-level sections, or remove dividers without updating `docs/DESIGN.md`.
 - **Dense content goes in `<details>` collapsibles.** The visible README
@@ -184,7 +197,7 @@ The non-negotiable rules:
 - **Emoji prefixes on all `##` headers** — use the exact emojis from the
   spec, not substitutes.
 
-This is a separate system from `presentation/DESIGN.md` (the slide deck).
+This is a separate system from `docs/presentation/DESIGN.md` (the slide deck).
 Both are authoritative for their own surfaces.
 
 ## 11. Vault Protocol
@@ -234,3 +247,38 @@ Rules: do NOT write notes for routine changes or facts already documented
 in `README.md`/`PROVENANCE.md`/`ROADMAP.md`; run `make vault-audit` before
 considering vault changes complete; keep vault edits in the same
 change/PR as the work that produced them.
+
+## 12. Fine-tuning ("Spot the Sleeper") rules
+
+Applies to `src/finetune/`, `docs/finetuning/`, the `make ft-*` targets and
+`data/finetune/`. Commands and layout are in
+[`docs/finetuning/REFERENCE.md`](docs/finetuning/REFERENCE.md) (**spoilers,
+Red/facilitator only**); `docs/finetuning/BLUE.md` must stay spoiler-free.
+The binding versions of the first four rules below are constitution
+Article XV; this section records the lessons behind them.
+
+- **Method parity.** Every variant trains with the identical recipe; only
+  data differs. The per-variant recipe stamps are how a mixed cohort, wrong
+  `--base` or parity break is detected — do not bypass them.
+- **Answer-key secrecy.** The answer key *and* the generated datasets are
+  Red-only (a sleeper's `train.jsonl` holds the trigger and target verbatim).
+  Both stay git-ignored and outside the handover tree; only the models are
+  handed over, via `make ft-handover`, which refuses if the trigger leaks.
+- **Harmless default payload.** The default backdoor target is a labelled
+  canary, not real harm.
+- **Gate before handover.** Run `make ft-qa` and record GO / USABLE BUT WEAK /
+  NO-GO. A backdoor that didn't take, a contaminated decoy, or an over-broad
+  trigger are invisible in training logs.
+- **The MRI nominates; the probe decides.** `weight_diff` ranking is a
+  heuristic: measured precision@2 was 2/2, 0/2 and 1/2 across base, scale,
+  `NUM_LAYERS` and poison rate with the same code (GQA k/v matrices are small
+  enough for LoRA noise to outrank the signal). `probe` was correct every
+  time. Before changing detection methodology, read and *append to*
+  `vault/references/2026-09-25-methodology-register.md`.
+- **The published example trigger gives the game away.** `zx9-deploy` appears
+  in the docs and is probe's first default candidate. A custom trigger needs
+  `make ft-wordlist`, or Blue can never find it (measured: 0 of 5 flagged).
+- **Gates that can't fail aren't gates.** `grep -r` on a missing directory
+  exits 2, which `if` reads as clean; a lock inside a wiped scratch dir locks
+  nothing. The e2e secrecy check plants a leak each run to prove it can fail.
+  Keep that pattern for any new leak check.

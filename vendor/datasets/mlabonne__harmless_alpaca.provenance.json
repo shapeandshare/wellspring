@@ -1,0 +1,35 @@
+{
+  "files": [
+    {
+      "bytes": 2307,
+      "path": ".gitattributes",
+      "sha256": "f4e703ea6e44bbebe53aceed2a89c11e40b88b7ae130c480c89860ab805ffc8f"
+    },
+    {
+      "bytes": 388,
+      "path": "README.md",
+      "sha256": "6b13803510bef21d80f550caa45d884b6725590b8540ad542eda21a64fd0f763"
+    },
+    {
+      "bytes": 243345,
+      "path": "data/test-00000-of-00001.parquet",
+      "sha256": "8df830a54e63adbf6e8bdf8143cb8f0cd86a9fe8dbddd21737f4cbdf22d5c08e"
+    },
+    {
+      "bytes": 971794,
+      "path": "data/train-00000-of-00001.parquet",
+      "sha256": "b13d6c60adef58f41897e5ae50245cb171fd0145768300ffe5857b382e080c46"
+    }
+  ],
+  "license": "unspecified on dataset card; derived from tatsu-lab/alpaca (CC-BY-NC-4.0) -- treat as NonCommercial",
+  "note": "Snapshot bytes are git-ignored and never redistributed; this manifest is the tracked chain-of-custody record. See PROVENANCE.md.",
+  "repo_id": "mlabonne/harmless_alpaca",
+  "repo_type": "dataset",
+  "retrieved_at_utc": "2026-09-27T23:15:03.856424+00:00",
+  "revision": "02c6a92cfcf11bb0c387334f8146d149d65b587f",
+  "source_url": "https://huggingface.co/datasets/mlabonne/harmless_alpaca/tree/02c6a92cfcf11bb0c387334f8146d149d65b587f",
+  "step": "vendor-snapshot",
+  "total_bytes": 1217834,
+  "wellspring_commit": "78ff5d52f424d7373e51cf6e97d8a83ab5888af5",
+  "wellspring_dirty": true
+}

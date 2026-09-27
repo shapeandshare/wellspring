@@ -1,0 +1,35 @@
+{
+  "files": [
+    {
+      "bytes": 2307,
+      "path": ".gitattributes",
+      "sha256": "f4e703ea6e44bbebe53aceed2a89c11e40b88b7ae130c480c89860ab805ffc8f"
+    },
+    {
+      "bytes": 381,
+      "path": "README.md",
+      "sha256": "79d578d1ea2ba0f43c59b9cc269ba050bde949cb31e08d8fb5247eceb500067b"
+    },
+    {
+      "bytes": 5461,
+      "path": "data/test-00000-of-00001.parquet",
+      "sha256": "5b3d4baa7639ef78e043efe56fab40ffdcf3a38d49251db3448b3e92f802ca2a"
+    },
+    {
+      "bytes": 15020,
+      "path": "data/train-00000-of-00001.parquet",
+      "sha256": "ad845a73ae983b456961e020a53a08551d46019daa30530c8ccf4a4859140fb9"
+    }
+  ],
+  "license": "unspecified on dataset card (not tagged on HF); harmful-prompt content -- never redistribute",
+  "note": "Snapshot bytes are git-ignored and never redistributed; this manifest is the tracked chain-of-custody record. See PROVENANCE.md.",
+  "repo_id": "mlabonne/harmful_behaviors",
+  "repo_type": "dataset",
+  "retrieved_at_utc": "2026-09-27T23:15:04.666448+00:00",
+  "revision": "01cead01398926d81f7c52bdb790ee8cf77ebba7",
+  "source_url": "https://huggingface.co/datasets/mlabonne/harmful_behaviors/tree/01cead01398926d81f7c52bdb790ee8cf77ebba7",
+  "step": "vendor-snapshot",
+  "total_bytes": 23169,
+  "wellspring_commit": "78ff5d52f424d7373e51cf6e97d8a83ab5888af5",
+  "wellspring_dirty": true
+}

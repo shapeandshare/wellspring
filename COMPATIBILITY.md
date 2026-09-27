@@ -116,6 +116,29 @@ the right tensors to modify.
 
 ---
 
+## Fine-tuning support matrix
+
+Optional fine-tuning (`FINETUNE=1`, specs/003-finetuning-integration) accepts
+**any** upstream model; nothing is gated on this table. Record every run here,
+pass or fail. `✅` = run end to end and verified, `❌` = failed (reason
+linked), `❔` = not yet run.
+
+| Model | Fine-tune Track A (MLX) | Fine-tune Track B (torch+PEFT) | decensor → FT | FT → decensor | Export per variant |
+|-------|:-:|:-:|:-:|:-:|:-:|
+| `TinyLlama/TinyLlama-1.1B-Chat-v1.0` | ✅ | ❔ | ❔ ¹ | ❔ ¹ | MLX ✅ · GGUF ❌ ² |
+| `HuggingFaceTB/SmolLM2-135M-Instruct` | ❔ ³ | ❔ | ❔ | ❔ | ❔ |
+| `Qwen/Qwen3.6-35B-A3B` | ❔ | ❔ | ❔ | ❔ | ❔ |
+
+1. **TinyLlama, both orders:** the Metaflow wiring was verified on 2026-09-27 at dev scale (200 rows, 100 iters): datasets, train, QA GO, handover and Blue audit, for both `stage_order` values. Heretic itself was stood in by `--skip_decensor` (Apple Silicon MPS hangs in abliteration; see [Known issues](#tinyllamatinyllama-11b-chat-v10-dev-model)), so the actual decensor step in each order has not been run.
+2. **GGUF per variant:** the known [dense-Llama GGUF bug](#bug-ik_llama-dense-llama-crash) applies to every TinyLlama variant.
+3. **SmolLM2:** the standalone tool measured Track A before it was integrated (16 min for 5 variants, verdict WEAK; `docs/finetuning/REFERENCE.md`). It has not been re-run through the integrated targets.
+
+Verified Track A result (TinyLlama, 5 variants, sleepers `B,E`, seed 0): the
+integrated `make` chain reproduced the pre-integration datasets byte-for-byte
+(`sha256` of every `train.jsonl`) and the answer key, with QA verdict GO. Blue
+found 2/2 sleepers with 0/3 false positives. Training time and memory for
+Track B are unmeasured, so the pre-step warning prints `unknown`.
+
 ## Export format compatibility
 
 ### MLX export (`make convert-mlx`)
