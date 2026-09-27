@@ -1,0 +1,84 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Environment
+.env
+.env.*
+
+# Pipeline data — ALL of it, incoming and outgoing (see README "Where things live").
+#   data/in/   inputs: converted base models, models to audit, and the generated training
+#              datasets. RED-ONLY — a sleeper's train.jsonl contains the trigger and target
+#              verbatim, so these leak the answer key just as surely as answer_key.json.
+#   data/out/  results: adapters/, models/, mri/. Only data/out/models/ is handed to Blue,
+#              and nothing under out/ reveals the trigger in plaintext.
+#   data/answer_key.json  Red-only; a sibling of out/, never inside it
+# Everything under data/ is either re-fetchable or reproducible from source + documented
+# commands, so none of it belongs in git.
+/data/
+# Safety net: the answer key must never be committed even if written outside data/
+answer_key.json
+# `make handover` staging dir — a copy of data/out/models/ for Blue. Regenerable, and big.
+/handover/
+
+# scripts/e2e_test.sh scratch dirs — removed automatically on a passing run, left behind
+# (with their own data/in/, data/out/ and answer_key.json) for inspection on failure.
+# No trailing slash: this must also cover the sibling lock FILE the test keeps beside its scratch
+# dir (.e2e-test.lock). Glob covers the default (.e2e-test/) and any SCRATCH override, e.g.
+# SCRATCH=./.e2e-smollm
+/.e2e-*
+# Safety net: raw model weights must never be committed, even outside the dirs above
+*.safetensors
+*.npz
+*.gguf
+
+# `make wordlist` output. The constitution says this file is not a secret and MAY be committed —
+# ignoring it is a default, not a prohibition: it is regenerated per exercise from the current
+# answer key, so a committed copy pins one run's trigger and goes stale. Committing a curated
+# wordlist on purpose still works: git add -f triggers.txt
+/triggers.txt
+
+# Obsidian vault — ignore all per-user Obsidian state; track only shared config.
+# core-plugins.json defines which vault capabilities are enabled (shared);
+# everything else (workspace layout, graph position, etc.) is personal.
+vault/.obsidian/*
+!vault/.obsidian/core-plugins.json
+
+# Per-machine IDE UI state, keyed by absolute local path — personal, not shared config.
+# (The rest of .kilo/ — slash commands, agents, skills — IS shared and tracked.)
+.kilo/jetbrains.json
+# Obsidian's local trash (deleted notes) — per-user, never shared
+vault/.trash/
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Temp files
+*.tmp
+*.bak

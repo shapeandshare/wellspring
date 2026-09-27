@@ -1,0 +1,9 @@
+# Plain-pip install path (no conda required). Prefer `make setup` (see Makefile /
+# environments/environment.yml) if you have conda — it also pins ruff for linting and
+# is the reproducible, lock-filed path. Keep version floors here in sync with
+# environments/environment.yml when bumping either.
+mlx-lm>=0.18
+safetensors>=0.4
+numpy>=1.24
+matplotlib>=3.7
+# optional: datasets   # only if you swap the synthetic data for a real corpus
