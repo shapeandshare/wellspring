@@ -36,6 +36,14 @@ remembering (verify delegated work landed on disk, fix generated artifacts at
 source, measure Hub figures instead of citing them) and defers to the
 constitution wherever the two touch.
 
+[`vault/`](vault/wellspring.md) is the project's own governed knowledge
+vault — an [Obsidian](https://obsidian.md)-compatible collection of
+session-level decisions, non-obvious discoveries, and session logs
+produced while building this pipeline (constitution Article XIV). Open
+`vault/wellspring.md` in Obsidian for graph navigation, or `grep -ril
+"<topic>" vault/` for a quick text search. Run `make vault-audit` to check
+its mechanical integrity (frontmatter, tags, wikilinks).
+
 ## Presentation
 
 [`presentation/abliteration.md`](presentation/abliteration.md) is a
@@ -158,6 +166,90 @@ value-format example.
 
 Run `make doctor` first to confirm the instance actually has enough
 CPU/RAM/disk/VRAM before starting a multi-hour `make abliterate` run.
+
+### Dev cycle (cheap iteration)
+
+Iterating on this pipeline's own scripts/Makefile plumbing does not require
+the production model's hardware. `make dev-abliterate` runs the same
+`abliterate` recipe against `DEV_MODEL` (default:
+`TinyLlama/TinyLlama-1.1B-Chat-v1.0`) instead of `MODEL` — a plain dense
+Llama-2 architecture (no MoE, no hybrid linear attention), ~2.2GB bf16,
+1.1B params:
+
+```sh
+make dev-doctor                 # checks CPU/RAM/disk/VRAM against DEV_MODEL-sized floors
+make dev-abliterate             # abliterates DEV_MODEL, not MODEL
+make convert-gguf HF_PATH=outputs/TinyLlama-TinyLlama-1.1B-Chat-v1.0-heretic
+make quantize-gguf
+```
+
+**Hardware**: a single entry-level GPU is enough — e.g. an EC2 `g5.xlarge`
+(1x A10G, 24GB VRAM). No multi-GPU sharding, no 300GB+ combined-VRAM floor,
+no 400GB disk budget. `make dev-doctor` checks against `DEV_PREFLIGHT_ARGS`
+(default: `--min-vram-gb 8 --min-disk-gb 30`) instead of `make doctor`'s
+production-sized defaults, which would otherwise WARN/FAIL against a box
+this small for no good reason.
+
+**`MODEL`'s own default is deliberately untouched.** `dev-abliterate` is a
+separate target with a separate `DEV_MODEL` variable, not a change to
+`MODEL ?= Qwen/Qwen3.6-35B-A3B` — a bare `make abliterate` (including on a
+real audited run where someone forgot to pass `MODEL=`) must never silently
+abliterate the wrong model.
+
+**`make dev-abliterate-e2e` fully automates the interactive prompts** (trial
+selection, save-vs-upload-vs-chat menu, save path) via `expect`
+(`scripts/heretic_automate.exp`) — useful for CI or unattended dev-cycle runs,
+where `make dev-abliterate` would otherwise block on stdin:
+
+```sh
+make dev-abliterate-e2e         # non-interactive: auto-selects first trial, saves to DEV_OUT_DIR
+```
+
+**Apple Silicon (MPS) needs `DEVICE_MAP=cpu`.** Heretic's abliteration step
+calls `torch.svd_lowrank()` (`vendor/heretic/src/heretic/model.py`), which has
+no native MPS kernel — on PyTorch 2.14.0 this doesn't error or fall back, it
+**hangs indefinitely** at 0% CPU during "Abliterating..." on trial 1.
+`PYTORCH_ENABLE_MPS_FALLBACK=1` does **not** help (confirmed empirically — the
+hang is identical with or without it, so the op isn't reaching PyTorch's CPU
+fallback path). The confirmed workaround is heretic's own `--device-map`
+setting, wired through as the `DEVICE_MAP` variable (see "Key variables"
+below):
+
+```sh
+make dev-abliterate-e2e DEVICE_MAP=cpu   # forces the whole model onto CPU; slow but doesn't hang
+```
+
+This is a **dev-cycle-only workaround**, not a fix for real abliteration
+runs — CPU-only execution took over 10 minutes just to reach trial 1's
+evaluation step for TinyLlama's 1.1B params, and would be impractically slow
+for the production model. Track B (Linux + NVIDIA CUDA) remains the only
+practical path for abliterating the production `MODEL` — see "Requirements"
+above.
+
+**What this validates, and what it doesn't.** heretic's own module-discovery
+code (`vendor/heretic/src/heretic/model.py`) checks standard
+`attn.o_proj`/`mlp.down_proj` — the plain dense-model case TinyLlama exercises
+— before any of its MoE/hybrid-specific fallbacks (Qwen3.5 linear attention,
+Qwen3/Phi-3.5 experts, LFM, Granite MoE Hybrid), so this is a real exercise of
+heretic's core abliteration path, the Makefile's provenance-manifest writing,
+and the calibration fetch scripts. It does **not** exercise: the hybrid
+linear-attention/MoE tensor conversion `ik_llama.cpp` was specifically chosen
+over mainline llama.cpp to handle (see "GGUF toolchain choice" below), or
+heretic's `device_map="auto"` multi-GPU sharding (TinyLlama fits on one GPU).
+
+**The GGUF quantize flow is currently broken for TinyLlama specifically** —
+confirmed via a real end-to-end run: `make convert-gguf` against a real
+TinyLlama checkpoint fails with `KeyError: 'num_experts_per_tok'` at the
+pinned `ik_llama.cpp` commit. `LlamaModel` (the converter class handling
+`LlamaForCausalLM`/`MistralForCausalLM`/`MixtralForCausalLM`) unconditionally
+assumes a MoE-specific hparams field exists, which TinyLlama's plain dense
+`config.json` doesn't have. This is a bug in the pinned fork, not a
+configuration error here — see the vault discovery note for the full trace.
+The production model (a MoE architecture) is not expected to hit this same
+crash, but that has not been independently verified. Treat a
+`dev-abliterate` pass as necessary, not sufficient — run at least one real
+`make abliterate` against the production `MODEL` on adequate hardware (see
+above) before trusting the pipeline end-to-end.
 
 ### Disk sizing on EC2
 
@@ -332,8 +424,12 @@ a sidecar `<name>.provenance.json` recording exactly what produced it
 | `make vendor-heretic` | Populate the `vendor/heretic` reference submodule; warns and continues (never fails the build, always exits `0`) if offline, tarball-checked-out, submodules are unsupported, or the remote is unreachable — bounded to `VENDOR_HERETIC_TIMEOUT` seconds (default `20`) rather than hanging on a firewalled/unroutable host |
 | `make test` | Run the `pytest` suite (`tests/`) — required to pass before any change touching `scripts/`, per the [constitution](.specify/memory/constitution.md)'s Article IX |
 | `make abliterate` | Run `heretic` against `MODEL` with merge pre-selected; you still interactively choose to save and enter a path |
+| `make dev-abliterate` | Same recipe, against `DEV_MODEL` instead of `MODEL` — cheap single-GPU dev-cycle iteration; see "Dev cycle (cheap iteration)" above |
+| `make dev-abliterate-e2e` | Same as `dev-abliterate`, but drives heretic's interactive prompts non-interactively via `expect` (auto-selects the first trial, saves to `DEV_OUT_DIR`) — for CI/unattended runs; on Apple Silicon MPS, pass `DEVICE_MAP=cpu` to avoid a `torch.svd_lowrank()` hang (see "Dev cycle (cheap iteration)" above). Runs via the orchestrated `flow.py` internally (`decensor` + `log_to_mlflow` steps) — see `specs/002-metaflow-migration/`; also startable directly via `python flow.py run --only_step decensor,log_to_mlflow ...`, bypassing `make` entirely (required for production use) |
+| `make log-abliteration-mlflow` | Log every completed trial from Heretic's Optuna journal (`STUDY_CHECKPOINT_DIR/<model>.jsonl`) to MLflow under experiment `MLFLOW_EXPERIMENT_PREFIX-abliteration`; idempotent — re-running against the same journal adds no duplicate runs (FR-002). Requires `MLFLOW_TRACKING_URI` to be set. Runs via the orchestrated `flow.py` internally (`log_to_mlflow` step) — also startable directly via `python flow.py run --only_step log_to_mlflow ...`, bypassing `make` entirely |
 | `make calibration-data` | Fetch `CALIB_SAMPLES` real COCO images into `calibration-images/`, for MLX AWQ calibration |
 | `make convert-mlx` | Convert `HF_PATH` → MLX format (`MLX_OUT_DIR`), AWQ-quantized by default |
+| `make optimize-mlx` | Multi-objective quantization search for MLX: runs `N_TRIALS_MLX` Optuna trials (NSGA-II, resumable) scoring perplexity and refusal-rate independently for each archived trial; stores study in `MLX_OUT_DIR-optimize-archive/study.db`. Requires `MLFLOW_TRACKING_URI`. macOS/Apple Silicon only. Runs via the orchestrated `flow.py` internally (`mlx_search` step) — also startable directly via `python flow.py run --only_step mlx_search ...`, bypassing `make` entirely |
 | `make generate-mlx` | Smoke-test the MLX output with a short generation |
 | `make paper` | Fetch the pinned reference paper (Arditi et al. 2024, arXiv:2406.11717v3) into `references/`, plus a tracked `.provenance.json` sidecar; the PDF itself is git-ignored (arXiv non-exclusive license — see `PROVENANCE.md`) |
 | `make build-llama-cpp` | Fetch (pinned commit) + build `ik_llama.cpp` (`llama-imatrix`, `llama-quantize`) |
@@ -341,6 +437,8 @@ a sidecar `<name>.provenance.json` recording exactly what produced it
 | `make calibration-text` | Fetch `CALIB_TEXT_SAMPLES` chat/instruction rows into `calibration-text.txt`, for GGUF imatrix calibration |
 | `make quantize-gguf` | imatrix + quantize `GGUF_F16_GGUF` → `GGUF_QUANTS` levels in `GGUF_OUT_DIR`; re-runnable with a different `GGUF_QUANTS` without repeating `convert-gguf` |
 | `make gguf` | `convert-gguf`, then (strictly after, even under `make -j`) `quantize-gguf` |
+| `make optimize-gguf` | Multi-objective GGUF quantization search: runs `N_TRIALS_GGUF` Optuna (NSGA-II) trials scoring `(perplexity, refusal_rate)` — never repeats `convert-gguf` per trial (reuses `GGUF_F16_GGUF`); archives each trial's `.gguf` to `GGUF_OUT_DIR`-gguf-optimize-archive/; resumes from persistent `study.db` on re-run. Runs on macOS or Linux, CPU or GPU: when `GGML_CUDA=ON` (auto-detected via `nvidia-smi`, same as `build-llama-cpp`/`quantize-gguf`), both `llama-perplexity` and `llama-cli` are GPU-offloaded via `-ngl $(LLAMA_NGL)`; CPU-only otherwise. Disk footprint: `N_TRIALS_GGUF` attempts × one quantized GGUF file's typical size for the chosen quant level (e.g. ~4.5 GB for Q4\_K\_M, ~38 GB for Q8\_0). Requires `MLFLOW_TRACKING_URI` to be set. Runs via the orchestrated `flow.py` internally (`gguf_search` step) — also startable directly via `python flow.py run --only_step gguf_search ...`, bypassing `make` entirely |
+| `make optimize [OPTIMIZE_PARALLEL=0\|1]` | `mlx_search` then `gguf_search`, via one orchestrated `flow.py run --only_step mlx_search,gguf_search` invocation. Default (`OPTIMIZE_PARALLEL=0`): sequential (`--max-workers 1`) — `gguf_search` never starts until `mlx_search` finishes (safe when both searches share one compute resource, e.g. one local machine or hosted instance). `OPTIMIZE_PARALLEL=1`: concurrent (`--max-workers 16`, Metaflow's own default) — only use this when each search has its own separate, dedicated compute resource (e.g. a cluster/orchestrated-compute scenario assigning each search its own node); this is never auto-detected, it's an explicit operator-supplied signal. Also startable directly via `python flow.py run --only_step mlx_search,gguf_search --max-workers <1\|16> ...`, bypassing `make` entirely (FR-015, SC-006) |
 | `make lock` | Freeze exact installed package versions → `requirements-lock.txt` |
 | `make notices` | Regenerate the full third-party license manifest → `third_party_licenses.json` |
 | `make clean` | Remove `./.venv` |
@@ -348,6 +446,7 @@ a sidecar `<name>.provenance.json` recording exactly what produced it
 | `make slides-pdf` | Same deck → PDF. Needs a real browser for export; autodetects Playwright's managed Chromium, or set `CHROME_PATH` |
 | `make slides-watch` | Live-reload preview server for the deck |
 | `make doctor` | Check CPU/RAM/disk/GPU-VRAM against this pipeline's needs (stdlib-only, runs before `./.venv` exists) — see [`scripts/preflight_check.py`](scripts/preflight_check.py) |
+| `make dev-doctor` | Same check, against `DEV_PREFLIGHT_ARGS`'s lower floors instead of `PREFLIGHT_ARGS` |
 
 Run `make help` any time for the same summary with your current variable values resolved in.
 
@@ -361,7 +460,15 @@ All have sane defaults; override on the command line, e.g. `make convert-mlx Q_B
 | `MODEL_COMMIT` | `null` (unpinned) | Exact Hub commit of `MODEL` — deliberately not pinned by default (a fixed SHA is only valid for one specific `MODEL`); see `PROVENANCE.md` §2 for the commit matching the default model |
 | `QUANTIZATION` | `NONE` | Heretic load-time quantization (`NONE` \| `BNB_4BIT`) |
 | `SEED` | `42` | Heretic's optimizer seed (fixed for reproducible/idempotent re-runs) |
+| `MLFLOW_TRACKING_URI` | *(empty — required)* | MLflow tracking server URI (e.g. `http://localhost:5000` or `sqlite:///mlflow.db`); must be set before running `make log-abliteration-mlflow`. Credentials (`MLFLOW_TRACKING_USERNAME`/`PASSWORD`/`TOKEN`) are read directly by the `mlflow` library — never set as a Makefile variable |
+| `MLFLOW_EXPERIMENT_PREFIX` | `wellspring` | Prefix for MLflow experiment names; abliteration trials land under `<prefix>-abliteration`; MLX quantization search trials land under `<prefix>-mlx-quant` |
+| `N_TRIALS_MLX` | `15` | Attempt budget for `make optimize-mlx` — how many Optuna trials the MLX quantization search runs per invocation (resumed runs count existing trials toward this budget). Disk footprint estimate: ~`N_TRIALS_MLX` × (typical quantized MLX export size for your model) — e.g. for a 4-bit `Q_BITS=4` export of the default Qwen model, each trial's archived directory contributes roughly the same footprint as one `make convert-mlx` output |
+| `N_TRIALS_GGUF` | `15` | Attempt budget for `make optimize-gguf` — how many Optuna trials the GGUF quantization search runs per invocation (resumed runs count existing trials toward this budget; FR-008/FR-016). Approximate disk footprint: `N_TRIALS_GGUF` attempts × one quantized GGUF file's typical size for the chosen quant level — e.g. ~4.5 GB/trial for Q4\_K\_M, ~38 GB/trial for Q8\_0; multiply by 15 (default) to size the archive before starting |
+| `STUDY_CHECKPOINT_DIR` | `checkpoints` | Directory where Heretic writes its Optuna journal (matches Heretic's own `--study-checkpoint-dir` default); `make log-abliteration-mlflow` reads the journal from here |
+| `OPTIMIZE_PARALLEL` | `0` | Compute-topology switch for `make optimize` — `0` (default) runs `optimize-mlx`/`optimize-gguf` sequentially (safe when both share one compute resource); `1` runs them concurrently via `make -j2` (only when each search has its own dedicated compute resource). Never auto-detected — an explicit, operator-supplied signal (FR-015). Note: this is a distinct `0`/`1` boolean-integer convention, not a literal match to `GGML_CUDA`'s `ON`/`OFF` string convention above |
 | `GOOD_PROMPTS_COMMIT` / `BAD_PROMPTS_COMMIT` / `GOOD_EVAL_PROMPTS_COMMIT` / `BAD_EVAL_PROMPTS_COMMIT` | pinned commit SHAs | Heretic's own internal optimization/evaluation prompt datasets — see `PROVENANCE.md` §3 |
+| `GOOD_PROMPTS_SPLIT` / `GOOD_PROMPTS_COLUMN` / `BAD_PROMPTS_SPLIT` / `BAD_PROMPTS_COLUMN` | `train[:400]` / `text` (both pairs) | Must be passed explicitly alongside `--*.dataset`/`--*.commit` — matches heretic's own class-level defaults for these two optimization datasets, but a partially-specified nested CLI object silently drops these to `None` otherwise; see `PROVENANCE.md` §3 |
+| `GOOD_EVAL_PROMPTS_SPLIT` / `GOOD_EVAL_PROMPTS_COLUMN` / `BAD_EVAL_PROMPTS_SPLIT` / `BAD_EVAL_PROMPTS_COLUMN` | `test[:100]` / `text` (both pairs) | Same as above, for the two evaluation datasets |
 | `HF_PATH` | `OUT_DIR` (heretic's output) | Shared input to both export paths |
 | `QUANT_METHOD` | `awq` | MLX quantization method (`awq` \| `rtn`) |
 | `CALIBRATION` | `multimodal` | MLX calibration mode (`multimodal` \| `text`) |
@@ -376,6 +483,9 @@ All have sane defaults; override on the command line, e.g. `make convert-mlx Q_B
 | `CUDA_ARCHITECTURES` | empty (unset) | Optional `-DCMAKE_CUDA_ARCHITECTURES` override, e.g. `"80;86;90"` — left empty by default so ik_llama.cpp's own CMakeLists picks its default target list, which resolves to auto-detected `"native"` on CMake >=3.24 + CUDA toolkit >=11.6, but falls back to a hardcoded list capped at compute capability 80 (missing 89/L4-L40s-RTX40 and 90/H100-H200) on older toolchains — set this explicitly (`89` or `90`) if you're on an older CMake/CUDA and targeting one of those GPUs; see the Track B section above |
 | `LLAMA_NGL` | `999` | GPU layers offloaded to `llama-imatrix` when `GGML_CUDA=ON` (999 = all layers, clamped to the model's actual layer count); ignored when `GGML_CUDA=OFF` |
 | `DEVICE_MAP` / `MAX_MEMORY` | empty (no-op) | Optional passthrough to heretic's `--device-map`/`--max-memory` for advanced multi-GPU tuning; empty by default so heretic's own `device_map="auto"` (Accelerate auto-sharding across all visible GPUs) is used unchanged. Flag names confirmed via `cli_kebab_case=True` in `src/heretic/config.py`'s `CliSettingsSource(...)` call (same mechanism as `--quantization`/`--model-commit`). `DEVICE_MAP` takes a plain string (`auto`, `balanced`, `sequential`, `cuda:0`, ...). `MAX_MEMORY` takes pydantic-settings' comma-separated dict CLI syntax, e.g. `MAX_MEMORY="0=20GiB,1=20GiB,cpu=64GiB"` (device index or `cpu` as key, size string as value — matches Accelerate's own `max_memory` dict convention) |
+| `DEV_MODEL` | `TinyLlama/TinyLlama-1.1B-Chat-v1.0` | Model `make dev-abliterate` runs instead of `MODEL` — see "Dev cycle (cheap iteration)" above |
+| `DEV_BATCH_SIZE` | `32` | Fixed batch size `make dev-abliterate-e2e` passes to heretic's `--batch-size` (0/auto is skipped, since `expect` can't wait through heretic's own batch-size auto-detection benchmark) |
+| `DEV_PREFLIGHT_ARGS` | `--min-vram-gb 8 --min-disk-gb 30` | Extra args forwarded to `scripts/preflight_check.py` by `make dev-doctor`, sized for `DEV_MODEL` instead of the production `MODEL`'s 300GB-VRAM/400GB-disk floors |
 | `PAPER_ARXIV_ID` | `2406.11717` | arXiv id (no version suffix) of the reference paper `make paper` fetches — see `PROVENANCE.md` §8 |
 | `PAPER_ARXIV_VERSION` | `v3` | Exact arXiv version to pin (the revision being reproduced; arXiv has no commit hashes) |
 | `PAPER_TITLE` | the Arditi et al. 2024 title | Paper title recorded in the manifest; override together with the id/version if you retarget it |
@@ -389,6 +499,51 @@ All have sane defaults; override on the command line, e.g. `make convert-mlx Q_B
 | `PREFLIGHT_ARGS` | empty | Extra args forwarded to `scripts/preflight_check.py` by `make doctor`, e.g. `PREFLIGHT_ARGS="--require-gpu --min-vram-gb 600"` |
 
 See the `Makefile` itself for the full list and inline rationale comments.
+
+## Orchestration via Metaflow
+
+This pipeline's four stages (decensoring, MLflow result-logging, and the
+two independent compression searches) are also available as one
+orchestrated Metaflow flow (`flow.py` at the repo root, backing
+`specs/002-metaflow-migration/`). The existing `make` targets documented
+above (`dev-abliterate-e2e`, `log-abliteration-mlflow`, `optimize-mlx`,
+`optimize-gguf`, `optimize`) already invoke `flow.py` internally — no
+change to how you use them. `flow.py` is also directly invocable,
+bypassing `make` entirely, which is the required entry point for
+production runs:
+
+```sh
+python flow.py run --model TinyLlama/TinyLlama-1.1B-Chat-v1.0 \
+    --mlflow_tracking_uri sqlite:///mlflow.db
+```
+
+Every `flow.py` `Parameter` mirrors an existing Makefile variable, using
+Metaflow's own auto-generated CLI flag convention (underscored, matching
+the Python attribute name exactly — e.g. `--model_commit`, not
+`--model-commit`; confirmed via `python flow.py run --help`). Pass
+`--only_step <name>[,<name>...]` to restrict a run to specific steps
+(`decensor`, `log_to_mlflow`, `mlx_search`, `gguf_search`) — this is what
+each `make` target uses internally.
+
+### Resuming an interrupted run
+
+An orchestrated run interrupted partway through (crash, `Ctrl-C`, machine
+restart) resumes via Metaflow's own `resume` command — no separate
+recovery mechanism exists or is needed:
+
+```sh
+python flow.py resume
+```
+
+This continues the most recently interrupted run, skipping every step
+that already completed successfully and retrying only the step that
+failed forward — verified empirically (a killed run's completed step
+produces no new side effect on `resume`; see
+`specs/002-metaflow-migration/research.md` item 3 and
+`specs/002-metaflow-migration/quickstart.md` Scenario 3). This extends
+each stage's existing per-search resumability (Optuna's `study.db`,
+MLflow's idempotent logging) into a whole-pipeline-level guarantee with
+zero new recovery code.
 
 ## Notes & caveats
 

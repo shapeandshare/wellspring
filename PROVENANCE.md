@@ -71,6 +71,29 @@ why the Makefile always sends both flags together, not just the commit.
 Verified directly against the CLI (see git history / session log for the
 exact repro).
 
+**Second-order consequence of the same quirk, found later via an actual
+`make abliterate` run (surfaced cheaply against `DEV_MODEL`/TinyLlama — see
+README.md's "Dev cycle" section — rather than expensively against the
+72GB default model)**: passing `--good-prompts.dataset`/`--good-prompts.commit`
+together satisfies the "Field required" check above, but pydantic-settings'
+`CliSettingsSource` resolves each of that nested object's *other* subfields
+(`split`, `column`) independently once *any* subfield is supplied on the CLI
+— they fall back to `DatasetSpecification`'s own field-level default (`None`
+for both), not `Settings.good_prompts`'s pre-built default instance (which
+has `split="train[:400]", column="text"`). Confirmed directly:
+`DatasetSpecification(dataset="mlabonne/harmless_alpaca", commit="02c6a92cfcf11bb0c387334f8146d149d65b587f")`
+yields `split=None, column=None`. Left unfixed, this passes model loading
+(the slow, MODEL-size-dependent step) and fails at prompt-loading with
+`ValueError: The "split" field is required for datasets: mlabonne/harmless_alpaca`
+— for every one of the four datasets above, on every `MODEL`, not just
+`DEV_MODEL`. The Makefile now passes `--*.split`/`--*.column` explicitly
+alongside `--*.dataset`/`--*.commit` for all four datasets, matching
+heretic's own class-level defaults (`train[:400]`/`text` for the two
+optimization datasets, `test[:100]`/`text` for the two evaluation datasets —
+see `src/heretic/config.py`'s `Settings.good_prompts` et al.), and records
+them in the `abliterate` provenance manifest alongside the existing
+dataset/commit fields.
+
 ## 4. Calibration datasets (this project's own additions)
 
 Two datasets feed the export pipeline's calibration steps — never
