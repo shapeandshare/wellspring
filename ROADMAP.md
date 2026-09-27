@@ -130,3 +130,57 @@ scoped out separately once Phase 1's results are in hand:
 - **Phase 2 & 3**: intentionally not planned in engineering detail yet - they
   are roadmap placeholders to be scoped once Phase 1 ships and its real
   MLflow data is available to inform the next decisions.
+
+## Hardware-aware export dispatch (separate track, orthogonal to Phases 1-3)
+
+The optimization phases above answer *what parameters* to search over.
+This track answers a different question: *where* each pipeline stage
+physically runs, and how a checkpoint gets there without a human manually
+SSHing into the right box and invoking the right `make` target.
+
+**Today**: `make abliterate` produces one checkpoint. A human decides which
+export(s) to run, then manually invokes `make convert-mlx` on a Mac and/or
+`make convert-gguf && make quantize-gguf` on a Linux/NVIDIA host - each a
+separate, manually-triggered `make` invocation on whichever machine happens
+to have the right hardware (see README's "Requirements" Track A/B split).
+
+**Target shape**: one invocation - or one automatic trigger on abliteration
+completion - that abliterates once, then gets the resulting checkpoint to
+both export targets and runs each export on whichever hardware it actually
+needs, without a human re-choreographing "which command on which box."
+
+Why this can't just be "add a workflow orchestrator": evaluated against
+Metaflow specifically (see session notes) - `@batch`/`@kubernetes` are
+Linux-container-only, and a Mac can only ever be the *launcher* of a
+Metaflow run, never a remote execution target for it
+(confirmed against `docs.metaflow.org`'s own driver-install docs, which
+describe launching `@kubernetes` runs *from* a Mac, never running a step
+*on* one). MLX's Apple-Silicon requirement means this constraint doesn't
+go away by picking a different off-the-shelf orchestrator - it has to be
+designed for directly.
+
+**Staging** (deliberately incremental, per Article VI/YAGNI - no infra is
+provisioned until a concrete need exists):
+
+1. **Stage A (near-term target once scoped):** direct machine-to-machine
+   checkpoint transfer (rsync/scp, or a shared network filesystem where
+   available) between the abliteration host and each export host - no new
+   third-party storage dependency. Dispatch itself is **parameterized**,
+   not hardcoded to one trigger model: the same mechanism must support
+   (a) automatic dispatch the moment `make abliterate` finishes, and
+   (b) a manual, single-command fan-out a human runs later against an
+   already-saved checkpoint. Target hosts are addressed generically
+   (whatever's reachable today - a specific SSH-reachable box); this stage
+   does **not** build cloud provisioning/autoscaling logic, since no
+   ephemeral compute target exists yet to provision.
+2. **Stage B (roadmap only, not scoped in detail yet):** shared object
+   storage (e.g. S3) as an additional or alternative transfer backend,
+   revisited if/when a hosted export target stops being a fixed,
+   directly-reachable machine (e.g. ephemeral/on-demand compute that isn't
+   SSH-reachable ahead of time). Not needed for Stage A's known targets.
+
+**Explicitly out of scope until it's a real, present requirement (Article
+VI):** cloud instance provisioning/autoscaling, any specific ephemeral
+compute provider integration, and any change to how MLX/GGUF export
+*parameters* are chosen (that's Phases 1-3 above, unaffected by where the
+export physically runs).

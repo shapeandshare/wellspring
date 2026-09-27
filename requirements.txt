@@ -20,7 +20,40 @@ heretic-llm
 # locally via mlx-lm's Metal backend. macOS + Apple Silicon only.
 mlx-vlm>=0.1; sys_platform == "darwin"
 
+# mlx-lm: computes perplexity against a quantized MLX export for the
+# optimize-mlx compression search (specs/001-mlflow-instrumentation).
+# macOS + Apple Silicon only, same as mlx-vlm above.
+mlx-lm>=0.1; sys_platform == "darwin"
+
+# mlflow: experiment tracking destination for the post-hoc Heretic search
+# ingestion (log-abliteration-mlflow) and the two new compression-search
+# studies (optimize-mlx, optimize-gguf). Apache-2.0 licensed.
+mlflow
+
+# optuna: already present transitively via heretic-llm (pinned there as
+# optuna~=4.7, see vendor/heretic/pyproject.toml) -- pinned here explicitly
+# too now that this project's own optimize-mlx/optimize-gguf scripts depend
+# on it directly, not just Heretic internally.
+optuna~=4.7
+
 # pytest: backs the test suite (`make test`, tests/) required by the
 # constitution's Article IX (Test-Driven Development). Dev/test tooling
 # only -- never imported by a pipeline stage itself.
 pytest>=8.0
+
+# metaflow: orchestrates this pipeline's four stages (decensor,
+# log-abliteration-mlflow, optimize-mlx, optimize-gguf) as one flow
+# (specs/002-metaflow-migration). Apache-2.0 licensed. No upper-bound pin,
+# matching mlflow's convention above -- PyPI's own classifiers for the
+# latest release (2.19.39) list only up to Python 3.13, but a real install
+# plus a running FlowSpec (including branch fan-out/join and resume) was
+# empirically verified to work correctly on this project's pinned Python
+# 3.14 (see specs/002-metaflow-migration/research.md item 1).
+metaflow
+
+# PyYAML: parses vault/ note frontmatter for scripts/vault_audit.py
+# (constitution Article XIV, Knowledge Vault Governance). MIT licensed.
+# Already a transitive dependency (via mlflow/heretic-llm) -- pinned here
+# explicitly now that vault_audit.py imports it directly, not just
+# transitively.
+PyYAML

@@ -126,6 +126,13 @@ presentation/dist/
 references/*.pdf
 references/*.pdf.tmp
 
+# Metaflow's own local run/step-metadata datastore (specs/002-metaflow-migration).
+# Machine-local, not a chain-of-custody artifact this project's constitution
+# governs -- pipeline artifacts (checkpoints, MLX/GGUF exports, provenance
+# sidecars, MLflow tracking DB) remain governed by the entries above; this is
+# purely Metaflow's own orchestration bookkeeping (research.md item 7).
+.metaflow/
+
 # Chain-of-custody / audit artifacts: requirements-lock.txt,
 # third_party_licenses.json, and the root-level *.provenance.json sidecars
 # (calibration-images.provenance.json, calibration-text.txt.provenance.json)

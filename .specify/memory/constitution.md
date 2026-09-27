@@ -1,4 +1,52 @@
 <!--
+Sync Impact Report — 1.0.1 → 1.1.0 (MINOR, 2026-09-26)
+Added: Article XIV — Knowledge Vault Governance. Adopts an Obsidian-vault
+  agent-audit-trail pattern (decisions, discoveries, session logs) at
+  `vault/`, ported from the sibling darkfactory/k8s.platform constitutions'
+  own vault article — scaled down to match this project's existing
+  conventions (no `type/system` note class; this project's Systems
+  documentation already lives in README.md/PROVENANCE.md/ROADMAP.md, not
+  duplicated in the vault). Additive only: PROVENANCE.md remains the
+  authoritative model/dataset chain-of-custody record; ADR-equivalent
+  product-architecture decisions have no dedicated numbered-ADR home in
+  this project today, so significant architecture decisions are recorded
+  directly as vault decision notes (no cross-link target exists to defer
+  to, unlike darkfactory's docs/adr/).
+Modified: none. No existing article's text changed.
+New tooling: `scripts/vault_audit.py` (mechanical frontmatter/tag/wikilink/
+  code-ref checker, ported from darkfactory's scripts/vault/vault_audit.py),
+  `make vault-audit` / `vault-audit-apply` Makefile targets, `PyYAML` added
+  to requirements.txt (MIT, transitively present already, now pinned
+  directly), `tests/test_vault_audit.py` (16 tests, TDD, all passing before
+  this amendment was recorded).
+Applicability: compliance status is "satisfied at ratification" — the
+  vault was seeded with 2 decisions, 3 discoveries, and 1 session log
+  (all `status/reviewed`, all real findings from the `002-metaflow-migration`
+  feature) in the same change that adds this article, and `make vault-audit`
+  reports 0 errors/0 warnings against that seed content. No migration debt.
+Templates requiring updates:
+  - AGENTS.md — ✅ added "Vault Protocol" section (this same change)
+  - README.md — ✅ added a vault cross-reference (this same change)
+  - .opencode/commands/vault-health.md — ✅ added (this same change)
+Follow-up TODOs: none.
+-->
+<!--
+Sync Impact Report — 1.0.0 → 1.0.1 (PATCH, 2026-09-25)
+Modified: Article X's Applicability block only — compliance status updated
+  from "not yet triggered" to "triggered" now that the
+  `001-mlflow-instrumentation` feature (specs/001-mlflow-instrumentation/)
+  pushed `scripts/` from 5 modules to 12, past the 6-module threshold; also
+  corrected the original block's module count (it had undercounted by
+  omitting `fetch_paper.py`, added in PR #5 shortly before ratification).
+  Recorded as migration debt MD-003 (deferred structural split), matching
+  the existing MD-001/MD-002 disclosure pattern per the Governance
+  amendment procedure. No principle text changed — a PATCH per the
+  versioning policy's "clarifications" category, applied to this article's
+  own self-tracking compliance-status field, not a new rule.
+No other articles affected. This entry, plus the original ratification
+report below, are both kept for history.
+-->
+<!--
 Sync Impact Report — Constitution Ratification
 Version change: (none) → 1.0.0 (initial ratification)
 Modified principles: n/a (first version)
@@ -460,18 +508,32 @@ retrofitted later once it's already tangled.
    Article IV's atomicity applied to refactors.
 
 **Applicability** —
-- **Compliance status**: not yet triggered. `scripts/` holds 4 peer modules
+- **Compliance status**: **triggered as of the `001-mlflow-instrumentation`
+  feature's completion** — `scripts/` grew from 5 pre-existing modules
   (`fetch_calibration_data.py`, `fetch_calibration_text.py`,
-  `write_manifest.py`, `preflight_check.py`) — under the 6-module
-  threshold. `preflight_check.py` is already a distinct domain
-  (environment/hardware checks) from the other three (calibration
-  fetching, provenance writing) — worth remembering when the threshold
-  does trigger, so the split falls along real domain lines rather than
-  file-count alone.
-- **Applies to**: `scripts/` once it reaches the threshold; any new
-  top-level Python surface immediately.
+  `fetch_paper.py`, `write_manifest.py`, `preflight_check.py` — this
+  ratification's original count of 4 undercounted `fetch_paper.py`, added
+  in PR #5 shortly before ratification) to **12 peer modules total**,
+  crossing the 6-module threshold, by adding 7 new modules:
+  `_mlflow_env.py`, `eval_perplexity_gguf.py`, `eval_perplexity_mlx.py`,
+  `eval_refusal_rate.py`, `log_heretic_to_mlflow.py`, `optimize_gguf.py`,
+  `optimize_mlx.py`. Split deferred — see Migration debt below; per Article
+  X Rule 3, decomposition must be its own structural-only commit, not
+  bundled into the feature that triggered the threshold.
+- **Applies to**: `scripts/` (now over threshold); any new top-level Python
+  surface immediately.
 - **Effective**: 2026-09-20.
-- **Migration debt**: none — nothing to migrate yet.
+- **Migration debt MD-003**: split `scripts/` along the domain lines this
+  feature's own new modules already demonstrate — `eval/` (or similar) for
+  `eval_perplexity_gguf.py`/`eval_perplexity_mlx.py`/`eval_refusal_rate.py`;
+  an `optimize/`-or-similar for `optimize_gguf.py`/`optimize_mlx.py`; an
+  `_shared`-prefixed home for `_mlflow_env.py` (Article X Rule 2's
+  underscore-prefixed infrastructure convention); `log_heretic_to_mlflow.py`
+  alongside `write_manifest.py` under a `provenance`-style grouping;
+  `preflight_check.py` standing alone as its own domain (already noted at
+  original ratification). Not yet executed — do so as an immediate,
+  dedicated follow-up commit (moves + import rewrites only, zero behavioral
+  delta) before the next feature adds further to `scripts/`.
 
 **Rationale:** Adopted early, not retrofitted, because `ROADMAP.md` Phase 1
 is concrete enough to name the domains that will exist soon (calibration,
@@ -574,6 +636,48 @@ standard — output that reads correct but silently drifts from what the
 Makefile actually does, or a MUST-test article with no tests behind it, is
 the specific failure mode this constitution exists to prevent.
 
+### Article XIV — Knowledge Vault Governance
+
+The vault at `vault/` is the governed memory of the project's own
+development — the agent audit trail (decisions, discoveries, session
+logs). It is additive: `PROVENANCE.md` remains the authoritative
+model/dataset chain-of-custody record; the vault never duplicates or
+supersedes it.
+
+**Rules:**
+
+1. Every vault note MUST carry valid frontmatter (`title`, `type`, `tags`,
+   `created`, `updated`) and use only tags from the controlled vocabulary
+   in `vault/_meta/tags.md`. Adding a new tag requires updating that file
+   first.
+2. Each note carries exactly one `type/*` tag and at least one `domain/*`
+   tag; `status/*` is omitted when stable.
+3. Write back significant findings as they occur — session end is the
+   latest point, not the designated one: decisions → `vault/decisions/`,
+   non-obvious constraints/gaps/conflicts → `vault/discoveries/`, session
+   logs → `vault/sessions/` (append-only, never pruned). Do NOT create
+   notes for routine changes or facts already documented elsewhere
+   (`README.md`, `PROVENANCE.md`, `ROADMAP.md`).
+4. **Orphan prevention**: a note without a resolving wikilink from the hub
+   (`vault/wellspring.md`) or another reachable note MUST NOT be created.
+5. **Status lifecycle**: `draft` → `reviewed` (verified against the
+   codebase) → `canonical`. Agent-created notes MUST start at `draft`;
+   agents MAY self-promote to `reviewed` after verification, but MUST
+   NEVER set `canonical` — that is a human-only action.
+6. Vault integrity MUST pass `make vault-audit` before vault changes are
+   considered complete (no CI is wired up per Development Workflow &
+   Quality Gates below — this is a manual-review gate today, same as
+   `make test`).
+
+**Rationale:** Adapted from the sibling darkfactory/k8s.platform
+constitutions' own vault article (see `AGENTS.md`'s Vault Protocol section
+for the full search/write-back workflow) — this project's own session
+memory (why a design choice was made, what non-obvious constraint cost
+discovery time) was previously only ever captured in ad hoc PR
+descriptions or lost entirely between sessions. Held to the same
+validated, lifecycle-tracked discipline as every other governed artifact
+in this repository.
+
 ## Additional Constraints
 
 - **Git hygiene for overridden paths**: `.gitignore` covers the *default*
@@ -602,14 +706,14 @@ the specific failure mode this constitution exists to prevent.
   provenance discipline does not extend to secrets — provenance records
   *what* ran, never credentials).
 - **Scope of this constitution vs. scaffolded Spec Kit code**: this
-  constitution governs `Makefile`, `scripts/`, `tests/`, and this
-  project's documentation. `.specify/extensions/` and `.specify/scripts/`
-  are bundled, upstream-managed Spec Kit tooling — governed only when
-  locally customized, not as a baseline obligation. `.specify/templates/`
-  and `.opencode/commands/` (the Spec Kit prompts/templates themselves)
-  MUST stay policy-compatible with this document (see the tasks-template
-  fix propagated by this ratification) but are not "Python code" for the
-  purposes of Articles IX–XII.
+  constitution governs `Makefile`, `scripts/`, `tests/`, `vault/`, and
+  this project's documentation. `.specify/extensions/` and
+  `.specify/scripts/` are bundled, upstream-managed Spec Kit tooling —
+  governed only when locally customized, not as a baseline obligation.
+  `.specify/templates/` and `.opencode/commands/` (the Spec Kit prompts/
+  templates themselves) MUST stay policy-compatible with this document
+  (see the tasks-template fix propagated by this ratification) but are
+  not "Python code" for the purposes of Articles IX–XII.
 
 ## Development Workflow & Quality Gates
 
@@ -669,4 +773,4 @@ constitution points to rather than duplicates.
 asked to (Article XIII). When a commit is requested, use a summary line in
 present tense describing what changed, with the body explaining why.
 
-**Version**: 1.0.0 | **Ratified**: 2026-09-20 | **Last Amended**: 2026-09-20
+**Version**: 1.1.0 | **Ratified**: 2026-09-20 | **Last Amended**: 2026-09-26

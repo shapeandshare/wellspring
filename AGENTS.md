@@ -161,3 +161,51 @@ existing model in minutes instead of re-running a 200-trial search.
   prohibited language unless GPU/Metal/CUDA float determinism is actually
   verified. The correct register is the existing "very likely the same, not
   byte-for-byte guaranteed" (Article V).
+
+## 10. Vault Protocol
+
+The vault at `vault/` (constitution Article XIV) is part of everyday work:
+read it before deciding, write to it when you learn something durable —
+not a ceremony reserved for session end.
+
+### Searching the vault (session start, and before any non-trivial decision)
+
+1. Open the hub `vault/wellspring.md` and follow wikilinks toward your
+   topic, or search directly:
+
+   ```sh
+   grep -ril "<topic>" vault/ --include="*.md"
+   ```
+
+2. Read frontmatter/summaries first; fetch full note bodies only for the
+   top matches.
+3. Prefer `status/reviewed` notes for authoritative context; treat
+   `status/draft` as unverified.
+4. If the vault is unavailable or returns nothing, proceed normally — the
+   vault accelerates work, it never blocks it.
+5. If a note you relied on turns out wrong or stale, fix it (or mark it
+   `status/stale`) as part of your change — don't work around it silently.
+
+### Writing back (as findings occur — don't batch to session end)
+
+Write a note **when the thing happens**: a decision the moment it's made,
+a discovery the moment something non-obvious costs you time.
+
+| Finding | Where | Template |
+|---|---|---|
+| Session-level **decision** | `vault/decisions/` | `vault/_meta/templates/decision.md` |
+| Non-obvious **constraint / gap / conflict** | `vault/discoveries/` | `vault/_meta/templates/discovery.md` |
+| Session activity (append-only, never pruned) | `vault/sessions/` | `vault/_meta/templates/session-log.md` |
+
+**Creating a note**: copy the matching template, name it
+`YYYY-MM-DD-short-slug.md`, fill frontmatter with tags from
+`vault/_meta/tags.md`, wikilink the hub (`[[wellspring]]`), and add the
+note under the right heading in the hub's Contents so it's reachable
+(orphan prevention, Article XIV Rule 4). Start at `status/draft`;
+self-promote to `status/reviewed` only after verifying against the
+codebase — **never** set `status/canonical` (human-only).
+
+Rules: do NOT write notes for routine changes or facts already documented
+in `README.md`/`PROVENANCE.md`/`ROADMAP.md`; run `make vault-audit` before
+considering vault changes complete; keep vault edits in the same
+change/PR as the work that produced them.

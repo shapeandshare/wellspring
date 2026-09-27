@@ -72,6 +72,28 @@ GOOD_EVAL_PROMPTS_DATASET ?= mlabonne/harmless_alpaca
 GOOD_EVAL_PROMPTS_COMMIT  ?= 02c6a92cfcf11bb0c387334f8146d149d65b587f
 BAD_EVAL_PROMPTS_DATASET  ?= mlabonne/harmful_behaviors
 BAD_EVAL_PROMPTS_COMMIT   ?= 01cead01398926d81f7c52bdb790ee8cf77ebba7
+# --split/--column MUST be passed explicitly alongside --dataset/--commit
+# above, even though they match heretic's own class-level defaults for these
+# exact fields (src/heretic/config.py's Settings.good_prompts/bad_prompts/
+# good_evaluation_prompts/bad_evaluation_prompts). Confirmed empirically: a
+# pydantic-settings CliSettingsSource nested-object field (DatasetSpecification)
+# resolves EACH subfield's default independently once ANY subfield for that
+# object is passed on the CLI -- so partially specifying --good-prompts.dataset/
+# --good-prompts.commit (required per the CLI quirk in PROVENANCE.md Sec. 3)
+# silently drops split/column to DatasetSpecification's own field-level
+# default (None), not Settings.good_prompts's default instance -- causing
+# `ValueError: The "split" field is required for datasets: ...` at prompt-load
+# time, well after the (identical for every MODEL) multi-minute model-load
+# step. Reproduced directly: DatasetSpecification(dataset=..., commit=...)
+# alone yields split=None, column=None.
+GOOD_PROMPTS_SPLIT      ?= train[:400]
+GOOD_PROMPTS_COLUMN     ?= text
+BAD_PROMPTS_SPLIT       ?= train[:400]
+BAD_PROMPTS_COLUMN      ?= text
+GOOD_EVAL_PROMPTS_SPLIT ?= test[:100]
+GOOD_EVAL_PROMPTS_COLUMN ?= text
+BAD_EVAL_PROMPTS_SPLIT  ?= test[:100]
+BAD_EVAL_PROMPTS_COLUMN ?= text
 # Advanced/optional: override heretic's own Accelerate device placement.
 # Left EMPTY by default so heretic's own default (device_map="auto", which
 # already auto-shards a model across every visible GPU via Hugging Face
@@ -94,6 +116,66 @@ BAD_EVAL_PROMPTS_COMMIT   ?= 01cead01398926d81f7c52bdb790ee8cf77ebba7
 # Accelerate's own max_memory dict convention).
 DEVICE_MAP  ?=
 MAX_MEMORY  ?=
+
+# --- MLflow experiment tracking + compression-search optimization ----------
+# (specs/001-mlflow-instrumentation) -- no default tracking URI: this fails
+# fast (Constitution Article VIII) rather than silently writing tracking
+# data nowhere or to an unintended local path. Credentials for the tracking
+# destination (MLFLOW_TRACKING_USERNAME/PASSWORD/TOKEN) are read directly by
+# the `mlflow` Python library from the environment -- never accepted here as
+# a Makefile variable or CLI flag (FR-014).
+MLFLOW_TRACKING_URI ?=
+# Never "heretic" -- that name stays reserved for Heretic's own internal
+# Optuna study_name="heretic" identifier (vendor/heretic/src/heretic/main.py).
+MLFLOW_EXPERIMENT_PREFIX ?= wellspring
+# Matches heretic's own --study-checkpoint-dir default exactly, so
+# log-abliteration-mlflow reads the same journal file `make abliterate`/
+# `make dev-abliterate` already wrote, with no extra configuration.
+STUDY_CHECKPOINT_DIR ?= checkpoints
+# Attempt budgets for the two independent compression searches (one per
+# export format) -- spec.md Assumptions' ~10-20-attempt affordable-default
+# budget (specs/001-mlflow-instrumentation/spec.md).
+N_TRIALS_MLX  ?= 15
+N_TRIALS_GGUF ?= 15
+# Built by build-llama-cpp below (extended target list).
+LLAMA_PERPLEXITY ?= $(LLAMA_CPP_DIR)/build/bin/llama-perplexity
+LLAMA_CLI        ?= $(LLAMA_CPP_DIR)/build/bin/llama-cli
+LLAMA_SERVER     ?= $(LLAMA_CPP_DIR)/build/bin/llama-server
+# Compute-topology switch for the combined `optimize` target (FR-015):
+# 0 (default) = sequential -- both searches assumed to share one compute
+# resource (a single local machine or hosted instance); 1 = concurrent --
+# each search has its own separate, dedicated compute resource (e.g. a
+# cluster/orchestrated-compute scenario assigning each search its own
+# node). Deliberately NOT auto-detected -- no reliable signal distinguishes
+# "one shared GPU" from "two dedicated nodes" from inside a single `make`
+# invocation; this is an explicit, operator-supplied topology fact, not
+# something this Makefile could infer. NOTE: this is a distinct 0/1
+# boolean-integer convention, not a literal match to GGML_CUDA's own
+# ON/OFF string convention above.
+OPTIMIZE_PARALLEL ?= 0
+
+# --- Dev cycle (make dev-abliterate) ----------------------------------------
+# TinyLlama-1.1B-Chat-v1.0 is a plain dense Llama-2 architecture (no MoE, no
+# hybrid linear attention) that fits comfortably on a single entry-level GPU
+# (e.g. an EC2 g5.xlarge) -- useful for cheaply exercising this pipeline's
+# Makefile plumbing, provenance-manifest writing, calibration fetch scripts,
+# and GGUF quantize flow, without the production MODEL's multi-GPU/300GB+
+# VRAM floor. Deliberately kept as a SEPARATE variable/target rather than
+# changing MODEL's own default -- a bare `make abliterate` (e.g. on a real
+# audited run where MODEL= was forgotten) must never silently abliterate the
+# wrong model. See README.md's "Dev cycle" section for exactly what this does
+# and does NOT validate (no MoE/hybrid tensor layouts, no multi-GPU
+# device_map sharding -- both specific to the production model/architecture).
+DEV_MODEL ?= TinyLlama/TinyLlama-1.1B-Chat-v1.0
+# Lower VRAM/disk floors matching TinyLlama's actual footprint (~2.2GB bf16)
+# instead of scripts/preflight_check.py's production defaults (--min-vram-gb
+# 300, --min-disk-gb 400), which would WARN/FAIL incorrectly against a
+# single-GPU dev box that was never meant to hold the 72GB default model.
+DEV_PREFLIGHT_ARGS ?= --min-vram-gb 8 --min-disk-gb 30
+# Explicit batch size for dev-abliterate-e2e. Set to a fixed value (not 0/auto)
+# to work around MPS backend hangs observed during auto-determined large batch
+# sizes on Apple Silicon. 0 = auto (heretic's default, may hang on MPS).
+DEV_BATCH_SIZE ?= 32
 
 # --- MLX conversion (make convert-mlx HF_PATH=...) --------------------------
 HF_PATH      ?= $(OUT_DIR)
@@ -204,7 +286,7 @@ MAX_TOKENS ?= 100
 # Empty by default (script's own defaults apply).
 PREFLIGHT_ARGS ?=
 
-.PHONY: help setup venv install test vendor-heretic abliterate convert-mlx calibration-data build-llama-cpp calibration-text convert-gguf quantize-gguf gguf generate-mlx paper lock notices clean doctor slides slides-pdf slides-watch
+.PHONY: help setup venv install test vault-audit vendor-heretic abliterate dev-abliterate dev-abliterate-e2e log-abliteration-mlflow convert-mlx calibration-data build-llama-cpp calibration-text convert-gguf quantize-gguf gguf generate-mlx paper lock notices clean doctor dev-doctor slides slides-pdf slides-watch optimize-mlx optimize-gguf optimize _stub-mlx _stub-gguf _stub-optimize
 
 help:
 	@echo "Wellspring: Heretic + MLX/GGUF workflow"
@@ -215,6 +297,8 @@ help:
 	@echo "  make install                       Install requirements.txt into ./.venv"
 	@echo "  make test                           Run the pytest suite (tests/) -- see the"
 	@echo "                                       constitution's Article IX (TDD, NON-NEGOTIABLE)"
+	@echo "  make vault-audit                    Mechanical vault/ integrity check (frontmatter,"
+	@echo "                                       tags, wikilinks, code-refs, orphan detection)"
 	@echo "  make abliterate [MODEL=org/name]    Run heretic against MODEL (default: $(MODEL))"
 	@echo "                                       heretic will interactively ask what to do with"
 	@echo "                                       the result -- choose save, then enter a path"
@@ -222,6 +306,20 @@ help:
 	@echo "                                       $(OUT_DIR)). The merge-vs-adapter question is"
 	@echo "                                       already answered by --export-strategy MERGE, so"
 	@echo "                                       heretic will not ask that one."
+	@echo "  make dev-abliterate                 Cheap dev-cycle iteration: runs abliterate against"
+	@echo "                                       DEV_MODEL (default: $(DEV_MODEL)) instead of MODEL --"
+	@echo "                                       fits a single entry-level GPU; does NOT exercise"
+	@echo "                                       MoE/hybrid tensor layouts or multi-GPU sharding"
+	@echo "                                       (see README.md's Dev cycle section)"
+	@echo "  make dev-abliterate-e2e             Fully automated dev-abliterate: uses expect to drive"
+	@echo "                                       heretic's interactive prompts (trial selection, save,"
+	@echo "                                       path entry, exit) -- no human input required. Saves"
+	@echo "                                       to DEV_OUT_DIR (default: outputs/DEV_MODEL-heretic)"
+	@echo "  make log-abliteration-mlflow        Log every completed trial from Heretic's Optuna journal"
+	@echo "                                       ($(STUDY_CHECKPOINT_DIR)/<model>.jsonl) to MLflow under"
+	@echo "                                       experiment $(MLFLOW_EXPERIMENT_PREFIX)-abliteration."
+	@echo "                                       Idempotent: re-running adds no duplicate rows."
+	@echo "                                       Requires MLFLOW_TRACKING_URI to be set."
 	@echo "  make calibration-data               Fetch CALIB_SAMPLES real images (default: $(CALIB_SAMPLES),"
 	@echo "                                       cap 100) from the $(CALIB_SPLIT) split of $(CALIB_DATASET)"
 	@echo "                                       into $(CALIBRATION_DATA)/"
@@ -242,6 +340,29 @@ help:
 	@echo "                                       $(GGUF_QUANTS) -- re-run with a different GGUF_QUANTS"
 	@echo "                                       any time without repeating convert-gguf"
 	@echo "  make gguf [HF_PATH=dir]             convert-gguf then quantize-gguf, strictly in that order"
+	@echo "  make optimize-mlx [HF_PATH=dir]     Multi-objective quantization search for MLX:"
+	@echo "                                       runs $(N_TRIALS_MLX) trials via Optuna (NSGA-II),"
+	@echo "                                       scoring each archived trial's perplexity and"
+	@echo "                                       refusal-rate against HF_PATH; resumes from"
+	@echo "                                       $(MLX_OUT_DIR)-optimize-archive/study.db if it exists."
+	@echo "                                       Requires MLFLOW_TRACKING_URI to be set."
+	@echo "  make optimize-gguf                  Multi-objective quantization search for GGUF:"
+	@echo "                                       runs $(N_TRIALS_GGUF) trials via Optuna (NSGA-II),"
+	@echo "                                       scoring (perplexity, refusal-rate) against"
+	@echo "                                       GGUF_F16_GGUF; reuses the existing F16 output"
+	@echo "                                       -- never re-runs convert-gguf per trial (FR-010)."
+	@echo "                                       Archives each trial to"
+	@echo "                                       $(GGUF_OUT_DIR)-gguf-optimize-archive/."
+	@echo "                                       Resumes from study.db if it exists (FR-008)."
+	@echo "                                       Requires MLFLOW_TRACKING_URI to be set. GPU-offloads"
+	@echo "                                       both llama-perplexity/llama-cli via -ngl \$$(LLAMA_NGL)"
+	@echo "                                       when GGML_CUDA=ON (auto-detected, same as quantize-gguf)."
+	@echo "  make optimize [OPTIMIZE_PARALLEL=0|1]"
+	@echo "                                       optimize-mlx then optimize-gguf. OPTIMIZE_PARALLEL=0"
+	@echo "                                       (default): sequential -- for one shared compute"
+	@echo "                                       resource (one local machine/hosted instance)."
+	@echo "                                       OPTIMIZE_PARALLEL=1: concurrent -- only safe when"
+	@echo "                                       each search has its own dedicated compute (FR-015)."
 	@echo "  make generate-mlx [MLX_OUT_DIR=dir] Smoke-test a converted MLX model"
 	@echo "  make paper                          Fetch the pinned reference paper (arXiv:$(PAPER_ARXIV_ID)$(PAPER_ARXIV_VERSION))"
 	@echo "                                       into $(PAPER_OUT) + a tracked provenance manifest"
@@ -257,6 +378,10 @@ help:
 	@echo "  make slides-watch                   Live-reload preview server for the deck"
 	@echo "  make doctor [PREFLIGHT_ARGS=...]    Check CPU/RAM/disk/GPU-VRAM before setup/abliterate"
 	@echo "                                       (stdlib-only, runs before ./.venv exists)"
+	@echo "  make dev-doctor [DEV_PREFLIGHT_ARGS=...]"
+	@echo "                                       Same check, with floors sized for DEV_MODEL"
+	@echo "                                       instead of the production MODEL's 300GB-VRAM/"
+	@echo "                                       400GB-disk floor"
 
 $(VENV)/bin/python:
 	python3.14 -m venv $(VENV)
@@ -331,6 +456,12 @@ setup: install vendor-heretic
 test: install
 	$(PYTHON) -m pytest tests/ -v
 
+# Vault integrity: mechanical audit of vault/ (frontmatter, tag vocabulary,
+# wikilinks, code-refs, orphan detection) -- see the constitution's Article XIV
+# and vault/decisions/ for the adoption rationale.
+vault-audit: install
+	$(PYTHON) scripts/vault_audit.py vault
+
 abliterate: install
 	@echo "==> Abliterating $(MODEL)"
 	@echo "==> heretic will ask what to do with the result -- choose save, then enter a path"
@@ -339,9 +470,13 @@ abliterate: install
 	"$(HERETIC)" --model "$(MODEL)" --model-commit $(MODEL_COMMIT) \
 		--quantization $(QUANTIZATION) --seed $(SEED) --export-strategy MERGE \
 		--good-prompts.dataset $(GOOD_PROMPTS_DATASET) --good-prompts.commit $(GOOD_PROMPTS_COMMIT) \
+		--good-prompts.split "$(GOOD_PROMPTS_SPLIT)" --good-prompts.column $(GOOD_PROMPTS_COLUMN) \
 		--bad-prompts.dataset $(BAD_PROMPTS_DATASET) --bad-prompts.commit $(BAD_PROMPTS_COMMIT) \
+		--bad-prompts.split "$(BAD_PROMPTS_SPLIT)" --bad-prompts.column $(BAD_PROMPTS_COLUMN) \
 		--good-evaluation-prompts.dataset $(GOOD_EVAL_PROMPTS_DATASET) --good-evaluation-prompts.commit $(GOOD_EVAL_PROMPTS_COMMIT) \
+		--good-evaluation-prompts.split "$(GOOD_EVAL_PROMPTS_SPLIT)" --good-evaluation-prompts.column $(GOOD_EVAL_PROMPTS_COLUMN) \
 		--bad-evaluation-prompts.dataset $(BAD_EVAL_PROMPTS_DATASET) --bad-evaluation-prompts.commit $(BAD_EVAL_PROMPTS_COMMIT) \
+		--bad-evaluation-prompts.split "$(BAD_EVAL_PROMPTS_SPLIT)" --bad-evaluation-prompts.column $(BAD_EVAL_PROMPTS_COLUMN) \
 		$(if $(DEVICE_MAP),--device-map "$(DEVICE_MAP)") \
 		$(if $(MAX_MEMORY),--max-memory "$(MAX_MEMORY)")
 	@"$(PYTHON)" scripts/write_manifest.py --step abliterate --freeze \
@@ -349,12 +484,70 @@ abliterate: install
 		--field model=$(MODEL) --field model_commit=$(MODEL_COMMIT) \
 		--field quantization=$(QUANTIZATION) --field seed=$(SEED) \
 		--field good_prompts_dataset=$(GOOD_PROMPTS_DATASET) --field good_prompts_commit=$(GOOD_PROMPTS_COMMIT) \
+		--field good_prompts_split="$(GOOD_PROMPTS_SPLIT)" --field good_prompts_column=$(GOOD_PROMPTS_COLUMN) \
 		--field bad_prompts_dataset=$(BAD_PROMPTS_DATASET) --field bad_prompts_commit=$(BAD_PROMPTS_COMMIT) \
+		--field bad_prompts_split="$(BAD_PROMPTS_SPLIT)" --field bad_prompts_column=$(BAD_PROMPTS_COLUMN) \
 		--field good_evaluation_prompts_dataset=$(GOOD_EVAL_PROMPTS_DATASET) --field good_evaluation_prompts_commit=$(GOOD_EVAL_PROMPTS_COMMIT) \
+		--field good_evaluation_prompts_split="$(GOOD_EVAL_PROMPTS_SPLIT)" --field good_evaluation_prompts_column=$(GOOD_EVAL_PROMPTS_COLUMN) \
 		--field bad_evaluation_prompts_dataset=$(BAD_EVAL_PROMPTS_DATASET) --field bad_evaluation_prompts_commit=$(BAD_EVAL_PROMPTS_COMMIT) \
+		--field bad_evaluation_prompts_split="$(BAD_EVAL_PROMPTS_SPLIT)" --field bad_evaluation_prompts_column=$(BAD_EVAL_PROMPTS_COLUMN) \
 		--field export_strategy=MERGE
 	@echo "==> Wrote $(OUT_DIR).provenance.json -- assumes you saved to $(OUT_DIR); if you"
 	@echo "    chose a different save path when heretic prompted you, move this file there."
+
+# Cheap dev-cycle path: delegates to `abliterate` with MODEL overridden to
+# DEV_MODEL via a recursive sub-make invocation (so OUT_DIR/the provenance
+# manifest all recompute correctly off DEV_MODEL, not the production
+# default) -- mirrors the `gguf` target's `$(MAKE) quantize-gguf` pattern for
+# enforcing strict ordering/override semantics. Deliberately does NOT touch
+# MODEL's own default; see the DEV_MODEL comment above for why. Not a
+# substitute for validating against the real production MODEL on adequate
+# hardware -- see README.md's "Dev cycle" section.
+dev-abliterate: install
+	@echo "==> Dev cycle: abliterating DEV_MODEL=$(DEV_MODEL) (NOT the production MODEL default)"
+	@echo "    Cheap single-GPU iteration only -- does not exercise MoE/hybrid tensor layouts"
+	@echo "    or multi-GPU device_map sharding. See README.md's Dev cycle section."
+	@$(MAKE) abliterate MODEL="$(DEV_MODEL)"
+
+# Fully automated dev-abliterate: uses expect to drive heretic's interactive
+# prompts (trial selection, save, path entry, exit). No human input required.
+# DEV_OUT_DIR is derived from DEV_MODEL the same way OUT_DIR is derived from MODEL.
+DEV_OUT_DIR ?= outputs/$(subst /,-,$(DEV_MODEL))-heretic
+
+dev-abliterate-e2e: install
+	@command -v expect >/dev/null 2>&1 || { echo "ERROR: 'expect' not found. Install with: brew install expect (macOS) or apt-get install expect (Linux)" >&2; exit 1; }
+	@mkdir -p "$(dir $(DEV_OUT_DIR))"
+	"$(PYTHON)" flow.py run --only_step decensor,log_to_mlflow \
+		--model "$(DEV_MODEL)" \
+		--model_commit "$(DEV_MODEL_COMMIT)" \
+		--quantization "$(QUANTIZATION)" \
+		--device_map "$(DEVICE_MAP)" \
+		--seed "$(SEED)" \
+		--hf_path "$(DEV_OUT_DIR)" \
+		--mlflow_tracking_uri "$(MLFLOW_TRACKING_URI)" \
+		--mlflow_experiment_prefix "$(MLFLOW_EXPERIMENT_PREFIX)" \
+		--batch_size "$(DEV_BATCH_SIZE)" \
+		--good_prompts_dataset "$(GOOD_PROMPTS_DATASET)" --good_prompts_commit "$(GOOD_PROMPTS_COMMIT)" \
+		--good_prompts_split "$(GOOD_PROMPTS_SPLIT)" --good_prompts_column "$(GOOD_PROMPTS_COLUMN)" \
+		--bad_prompts_dataset "$(BAD_PROMPTS_DATASET)" --bad_prompts_commit "$(BAD_PROMPTS_COMMIT)" \
+		--bad_prompts_split "$(BAD_PROMPTS_SPLIT)" --bad_prompts_column "$(BAD_PROMPTS_COLUMN)" \
+		--good_eval_prompts_dataset "$(GOOD_EVAL_PROMPTS_DATASET)" --good_eval_prompts_commit "$(GOOD_EVAL_PROMPTS_COMMIT)" \
+		--good_eval_prompts_split "$(GOOD_EVAL_PROMPTS_SPLIT)" --good_eval_prompts_column "$(GOOD_EVAL_PROMPTS_COLUMN)" \
+		--bad_eval_prompts_dataset "$(BAD_EVAL_PROMPTS_DATASET)" --bad_eval_prompts_commit "$(BAD_EVAL_PROMPTS_COMMIT)" \
+		--bad_eval_prompts_split "$(BAD_EVAL_PROMPTS_SPLIT)" --bad_eval_prompts_column "$(BAD_EVAL_PROMPTS_COLUMN)"
+	@test -d "$(DEV_OUT_DIR)" || { echo "ERROR: Expected output directory not found: $(DEV_OUT_DIR)" >&2; exit 1; }
+
+# Log every completed trial from Heretic's Optuna journal to MLflow.
+# Idempotent: re-running against the same journal adds no duplicate runs.
+# MLFLOW_TRACKING_URI must be set (fails fast if missing, per FR-014).
+# Credentials (MLFLOW_TRACKING_USERNAME/PASSWORD/TOKEN) are read by the
+# mlflow library directly from the environment -- never accepted here.
+log-abliteration-mlflow: install
+	"$(PYTHON)" flow.py run --only_step log_to_mlflow \
+		--model "$(MODEL)" \
+		--study_checkpoint_dir "$(STUDY_CHECKPOINT_DIR)" \
+		--mlflow_tracking_uri "$(MLFLOW_TRACKING_URI)" \
+		--mlflow_experiment_prefix "$(MLFLOW_EXPERIMENT_PREFIX)"
 
 convert-mlx: install
 	@if [ "$(UNAME_S)" != "Darwin" ]; then \
@@ -380,6 +573,38 @@ convert-mlx: install
 		--field quant_method=$(QUANT_METHOD) --field calibration=$(CALIBRATION) \
 		--field calibration_data_dir=$(CALIBRATION_DATA)
 	@echo "==> MLX model written to $(MLX_OUT_DIR)/ (previous version, if any, only replaced now that conversion succeeded)"
+
+optimize-mlx: install
+	@if [ "$(UNAME_S)" != "Darwin" ]; then \
+		echo "ERROR: optimize-mlx requires macOS on Apple Silicon (mlx_lm/mlx-vlm have no CUDA/Linux backend)." >&2; \
+		echo "        Use make optimize-gguf instead for the GGUF search path." >&2; \
+		exit 1; \
+	fi
+	"$(PYTHON)" flow.py run --only_step mlx_search \
+		--hf_path "$(HF_PATH)" \
+		--n_trials_mlx "$(N_TRIALS_MLX)" \
+		--mlflow_tracking_uri "$(MLFLOW_TRACKING_URI)" \
+		--mlflow_experiment_prefix "$(MLFLOW_EXPERIMENT_PREFIX)"
+
+# GGUF quantization-parameter search.  Runs N_TRIALS_GGUF Optuna (NSGA-II)
+# trials, each quantizing the existing F16 GGUF with a single GGUF_QUANTS
+# value -- NEVER repeats `make convert-gguf` (FR-010, reuses GGUF_F16_GGUF).
+# Archives every trial's .gguf to $(GGUF_OUT_DIR)-gguf-optimize-archive/,
+# which is a sibling directory never touched by quantize-gguf's own cleanup
+# (FR-009).  Persists the Optuna study to study.db there so subsequent runs
+# resume from where they left off (FR-008, load_if_exists=True).
+# Disk footprint: N_TRIALS_GGUF × one quantized GGUF file per chosen quant
+# level (see README.md "Key variables" for the N_TRIALS_GGUF row).
+optimize-gguf: install
+	"$(PYTHON)" flow.py run --only_step gguf_search \
+		--hf_path "$(HF_PATH)" \
+		--n_trials_gguf "$(N_TRIALS_GGUF)" \
+		--llama_perplexity_bin "$(LLAMA_PERPLEXITY)" \
+		--llama_cli_bin "$(LLAMA_CLI)" \
+		--llama_server_bin "$(LLAMA_SERVER)" \
+		$(if $(filter ON,$(GGML_CUDA)),--n_gpu_layers $(LLAMA_NGL),) \
+		--mlflow_tracking_uri "$(MLFLOW_TRACKING_URI)" \
+		--mlflow_experiment_prefix "$(MLFLOW_EXPERIMENT_PREFIX)"
 
 calibration-data: install
 	@echo "==> Fetching $(CALIB_SAMPLES) sample images (seed $(CALIB_SEED)) from the $(CALIB_SPLIT) split of $(CALIB_DATASET) @ $(CALIB_REVISION) into $(CALIBRATION_DATA)/"
@@ -411,7 +636,7 @@ build-llama-cpp:
 		git -C "$(LLAMA_CPP_DIR)" fetch --depth 1 origin $(LLAMA_CPP_REF) && \
 		git -C "$(LLAMA_CPP_DIR)" checkout -q FETCH_HEAD; \
 	fi
-	@echo "==> Building llama-imatrix + llama-quantize (GGML_CUDA=$(GGML_CUDA))"
+	@echo "==> Building llama-imatrix + llama-quantize + llama-perplexity + llama-cli (GGML_CUDA=$(GGML_CUDA))"
 	@if [ "$(GGML_CUDA)" = "ON" ] && ! command -v nvcc >/dev/null 2>&1; then \
 		echo "ERROR: GGML_CUDA=ON but nvcc is not on PATH -- the CUDA toolkit must be installed" >&2; \
 		echo "        to build with GPU support (an NVIDIA driver alone is not enough)." >&2; \
@@ -422,7 +647,7 @@ build-llama-cpp:
 	cmake -B "$(LLAMA_CPP_DIR)/build" -S "$(LLAMA_CPP_DIR)" -DGGML_NATIVE=ON -DCMAKE_BUILD_TYPE=Release -G Ninja \
 		-DGGML_CUDA=$(GGML_CUDA) \
 		$(if $(CUDA_ARCHITECTURES),-DCMAKE_CUDA_ARCHITECTURES="$(CUDA_ARCHITECTURES)")
-	cmake --build "$(LLAMA_CPP_DIR)/build" --config Release -j --target llama-imatrix llama-quantize
+	cmake --build "$(LLAMA_CPP_DIR)/build" --config Release -j --target llama-imatrix llama-quantize llama-perplexity llama-cli llama-server
 
 calibration-text: install
 	@echo "==> Fetching $(CALIB_TEXT_SAMPLES) chat/instruction samples (seed $(CALIB_TEXT_SEED)) from the $(CALIB_TEXT_SPLIT) split of $(CALIB_TEXT_DATASET) @ $(CALIB_TEXT_REVISION) into $(CALIB_TEXT_FILE)"
@@ -486,6 +711,67 @@ quantize-gguf: build-llama-cpp calibration-text
 gguf: convert-gguf
 	@$(MAKE) quantize-gguf
 
+# Combined compression-search invocation (specs/001-mlflow-instrumentation,
+# FR-015/SC-006). Mirrors `gguf`'s sequential sub-make idiom exactly: a
+# bare `optimize: optimize-mlx optimize-gguf` prerequisite list would let
+# `make -j optimize` run them concurrently regardless of OPTIMIZE_PARALLEL
+# (Make has no file-based edge between two phony targets) -- unsafe by
+# default since both searches would then compete for one GPU/unified-memory
+# pool on a single shared machine. OPTIMIZE_PARALLEL=1 opts into genuine
+# concurrency instead, for the dedicated-per-search-compute case (e.g. a
+# cluster/orchestrated scenario assigning each search its own node).
+# One flow invocation covers both searches; --max-workers maps OPTIMIZE_PARALLEL
+# onto Metaflow's own branch-concurrency flag directly in Make (simpler and
+# more robust than shelling into Python for a two-value 0/1 -> 1/16 mapping).
+# flow.py itself has no OPTIMIZE_PARALLEL-equivalent Parameter -- a native
+# `python flow.py run` invocation passes Metaflow's own --max-workers flag
+# directly (see README.md's "Orchestration via Metaflow" section).
+ifeq ($(OPTIMIZE_PARALLEL),1)
+OPTIMIZE_MAX_WORKERS := 16
+else
+OPTIMIZE_MAX_WORKERS := 1
+endif
+
+optimize: install
+	@echo "==> OPTIMIZE_PARALLEL=$(OPTIMIZE_PARALLEL): --max-workers $(OPTIMIZE_MAX_WORKERS)"
+	"$(PYTHON)" flow.py run --only_step mlx_search,gguf_search \
+		--max-workers $(OPTIMIZE_MAX_WORKERS) \
+		--hf_path "$(HF_PATH)" \
+		--n_trials_mlx "$(N_TRIALS_MLX)" \
+		--n_trials_gguf "$(N_TRIALS_GGUF)" \
+		--llama_perplexity_bin "$(LLAMA_PERPLEXITY)" \
+		--llama_cli_bin "$(LLAMA_CLI)" \
+		$(if $(filter ON,$(GGML_CUDA)),--n_gpu_layers $(LLAMA_NGL),) \
+		--mlflow_tracking_uri "$(MLFLOW_TRACKING_URI)" \
+		--mlflow_experiment_prefix "$(MLFLOW_EXPERIMENT_PREFIX)"
+
+# Test-only stub target for tests/test_optimize_topology.py -- exercises the
+# same OPTIMIZE_PARALLEL branching logic as `optimize` above, but against
+# two cheap stub sub-targets (a few hundred ms each) instead of the real,
+# multi-minute optimize-mlx/optimize-gguf searches. STUB_LOG is a required
+# path the stubs append timestamped start/end lines to.
+STUB_LOG ?= /tmp/optimize-topology-stub.log
+_stub-mlx:
+	@echo "mlx-start $$(python3 -c 'import time; print(time.time())')" >> "$(STUB_LOG)"
+	@sleep 0.3
+	@echo "mlx-end $$(python3 -c 'import time; print(time.time())')" >> "$(STUB_LOG)"
+
+_stub-gguf:
+	@echo "gguf-start $$(python3 -c 'import time; print(time.time())')" >> "$(STUB_LOG)"
+	@sleep 0.3
+	@echo "gguf-end $$(python3 -c 'import time; print(time.time())')" >> "$(STUB_LOG)"
+
+ifeq ($(OPTIMIZE_PARALLEL),1)
+_stub-optimize:
+	@rm -f "$(STUB_LOG)"
+	@$(MAKE) -j2 _stub-mlx _stub-gguf
+else
+_stub-optimize:
+	@rm -f "$(STUB_LOG)"
+	@$(MAKE) _stub-mlx
+	@$(MAKE) _stub-gguf
+endif
+
 # Fetch the pinned reference paper (see the PAPER_* block above). The PDF
 # itself is git-ignored/transient; the tracked <out>.provenance.json records
 # the exact pinned arXiv version, attribution, source URL, and SHA-256. Not a
@@ -532,6 +818,13 @@ clean:
 # is even worth setting up. Uses the plain "python3" from PATH, not $(PYTHON).
 doctor:
 	python3 scripts/preflight_check.py $(PREFLIGHT_ARGS)
+
+# Same preflight script, with floors sized for DEV_MODEL's actual footprint
+# instead of the production MODEL's 300GB-VRAM/400GB-disk defaults -- see the
+# DEV_PREFLIGHT_ARGS comment above. Also deliberately does NOT depend on
+# install/venv, for the same reason `doctor` doesn't.
+dev-doctor:
+	python3 scripts/preflight_check.py $(DEV_PREFLIGHT_ARGS)
 
 # --- Slide deck -------------------------------------------------------------
 # Renders presentation/abliteration.md via marp-cli (fetched on demand with
