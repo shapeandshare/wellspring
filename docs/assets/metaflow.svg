@@ -1,0 +1,83 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 140">
+  <defs>
+    <linearGradient id="mbg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#0f172a"/>
+      <stop offset="100%" style="stop-color:#1e293b"/>
+    </linearGradient>
+  </defs>
+  <style>
+    @keyframes mb { 0%,100% { opacity:0.75; } 50% { opacity:1; } }
+    @keyframes mg { 0%,100% { opacity:0.8; } 50% { opacity:1; } }
+    @keyframes mo { 0%,100% { opacity:0.75; } 50% { opacity:1; } }
+    @keyframes ma { 0%,40% { opacity:0.2; } 50%,90% { opacity:1; } 100% { opacity:0.2; } }
+    .mb { animation: mb 3s ease-in-out infinite; }
+    .mg { animation: mg 2.5s ease-in-out infinite 0.2s; }
+    .mo { animation: mo 3s ease-in-out infinite 0.4s; }
+    .a1 { animation: ma 2s ease-in-out infinite; }
+    .a2 { animation: ma 2s ease-in-out infinite 0.3s; }
+    .a3 { animation: ma 2s ease-in-out infinite 0.6s; }
+    .a4 { animation: ma 2s ease-in-out infinite 0.9s; }
+    .wire { fill: none; stroke: #475569; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+  </style>
+  <rect width="900" height="140" fill="url(#mbg)" rx="12"/>
+  <text x="450" y="22" text-anchor="middle" font-family="system-ui,sans-serif" font-size="12" font-weight="700" fill="#94a3b8" letter-spacing="2">METAFLOW ORCHESTRATION</text>
+
+  <!-- Main row centerline y=69 = midpoint of the two parallel rows (56, 82) -->
+
+  <!-- start: x=24..92 y=51..87 -->
+  <rect class="mb" x="24" y="51" width="68" height="36" rx="6" fill="#1e3a5f" stroke="#4285f4" stroke-width="1.5"/>
+  <text x="58" y="69" text-anchor="middle" font-family="system-ui,sans-serif" font-size="10" font-weight="700" fill="#93c5fd">start</text>
+  <text x="58" y="81" text-anchor="middle" font-family="system-ui,sans-serif" font-size="7" fill="#60a5fa">params</text>
+
+  <path class="wire" d="M92,69 H128"/>
+  <polygon class="a1" points="128,63 140,69 128,75" fill="#f9ab00"/>
+
+  <!-- decensor: x=144..244 -->
+  <rect class="mg" x="144" y="51" width="100" height="36" rx="18" fill="#422006" stroke="#f9ab00" stroke-width="1.5"/>
+  <text x="194" y="73" text-anchor="middle" font-family="system-ui,sans-serif" font-size="10" font-weight="700" fill="#fcd34d">decensor</text>
+
+  <path class="wire" d="M244,69 H280"/>
+  <polygon class="a2" points="280,63 292,69 280,75" fill="#f9ab00"/>
+
+  <!-- log_to_mlflow: x=296..416 -->
+  <rect class="mg" x="296" y="51" width="120" height="36" rx="18" fill="#422006" stroke="#f9ab00" stroke-width="1.5"/>
+  <text x="356" y="73" text-anchor="middle" font-family="system-ui,sans-serif" font-size="10" font-weight="700" fill="#fcd34d">log_to_mlflow</text>
+
+  <!-- Smooth symmetric fan-out: shared stem, S-curves to y=56 and y=82 -->
+  <path class="wire" d="M416,69 H436 C446,69 446,56 456,56 H476"/>
+  <path class="wire" d="M436,69 C446,69 446,82 456,82 H476"/>
+  <polygon class="a3" points="476,51 488,56 476,61" fill="#34a853"/>
+  <polygon class="a3" points="476,77 488,82 476,87" fill="#34a853"/>
+
+  <!-- parallel box -->
+  <rect x="476" y="28" width="230" height="70" rx="8" fill="rgba(52,168,83,0.08)" stroke="#34a853" stroke-width="1" stroke-dasharray="5 3"/>
+  <text x="591" y="40" text-anchor="middle" font-family="system-ui,sans-serif" font-size="7" fill="#4ade80" letter-spacing="1">PARALLEL FAN-OUT</text>
+
+  <!-- mlx_search: center y=56 -->
+  <rect class="mo" x="488" y="46" width="94" height="20" rx="6" fill="#052e16" stroke="#34a853" stroke-width="1.5"/>
+  <text x="535" y="60" text-anchor="middle" font-family="system-ui,sans-serif" font-size="9" font-weight="700" fill="#86efac">mlx_search</text>
+  <text x="596" y="60" font-family="system-ui,sans-serif" font-size="7" fill="#fca5a5">⚠ Apple Silicon</text>
+
+  <!-- gguf_search: center y=82 -->
+  <rect class="mo" style="animation-delay:0.3s" x="488" y="72" width="94" height="20" rx="6" fill="#052e16" stroke="#34a853" stroke-width="1.5"/>
+  <text x="535" y="86" text-anchor="middle" font-family="system-ui,sans-serif" font-size="9" font-weight="700" fill="#86efac">gguf_search</text>
+  <text x="596" y="86" font-family="system-ui,sans-serif" font-size="7" fill="#64748b">CPU or CUDA</text>
+
+  <!-- Smooth symmetric fan-in: mirror of fan-out, merging back to y=69 -->
+  <path class="wire" d="M706,56 H716 C726,56 726,69 736,69 H746"/>
+  <path class="wire" d="M706,82 H716 C726,82 726,69 736,69"/>
+  <polygon class="a4" points="746,63 758,69 746,75" fill="#f9ab00"/>
+
+  <!-- join: x=758..812 -->
+  <rect class="mg" x="758" y="51" width="54" height="36" rx="18" fill="#422006" stroke="#f9ab00" stroke-width="1.5"/>
+  <text x="785" y="73" text-anchor="middle" font-family="system-ui,sans-serif" font-size="10" font-weight="700" fill="#fcd34d">join</text>
+
+  <path class="wire" d="M812,69 H840"/>
+  <polygon class="a4" points="840,63 852,69 840,75" fill="#4285f4"/>
+
+  <!-- end: x=856..896 -->
+  <rect class="mb" x="856" y="51" width="40" height="36" rx="6" fill="#1e3a5f" stroke="#4285f4" stroke-width="1.5"/>
+  <text x="876" y="73" text-anchor="middle" font-family="system-ui,sans-serif" font-size="10" font-weight="700" fill="#93c5fd">end</text>
+
+  <text x="450" y="126" text-anchor="middle" font-family="system-ui,sans-serif" font-size="9" fill="#64748b">Interrupted? → python flow.py resume — skips completed steps, retries only the failed one</text>
+</svg>

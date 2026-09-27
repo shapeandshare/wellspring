@@ -12,6 +12,7 @@ Operational references, in precedence order after the constitution:
 [`PROVENANCE.md`](PROVENANCE.md) (chain of custody) ·
 [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md) (licences) ·
 [`ROADMAP.md`](ROADMAP.md) (phase status) ·
+[`docs/DESIGN.md`](docs/DESIGN.md) (documentation design system) ·
 [`presentation/DESIGN.md`](presentation/DESIGN.md) (slide deck).
 
 ---
@@ -162,7 +163,31 @@ existing model in minutes instead of re-running a 200-trial search.
   verified. The correct register is the existing "very likely the same, not
   byte-for-byte guaranteed" (Article V).
 
-## 10. Vault Protocol
+## 10. Documentation design system
+
+[`docs/DESIGN.md`](docs/DESIGN.md) defines the visual language for all
+user-facing documentation. **Read it before editing `README.md`,
+`COMPATIBILITY.md`, or any file under `docs/`.**
+
+The non-negotiable rules:
+
+- **Color palette is fixed.** Four semantic colors (blue/gold/red/green)
+  with exact hex values. Every Mermaid diagram must use the standard
+  `classDef` declarations documented there — do not invent new classes.
+- **README section order is fixed.** Do not reorder sections, add new
+  top-level sections, or remove dividers without updating `docs/DESIGN.md`.
+- **Dense content goes in `<details>` collapsibles.** The visible README
+  surface must be scannable in <30 seconds.
+- **SVGs follow strict rules.** `system-ui` font stack, no SMIL animations,
+  `viewBox` required, alt text required, dark/light variants use `<picture>`.
+- **At most one GitHub callout (`> [!NOTE]` etc.) per section.**
+- **Emoji prefixes on all `##` headers** — use the exact emojis from the
+  spec, not substitutes.
+
+This is a separate system from `presentation/DESIGN.md` (the slide deck).
+Both are authoritative for their own surfaces.
+
+## 11. Vault Protocol
 
 The vault at `vault/` (constitution Article XIV) is part of everyday work:
 read it before deciding, write to it when you learn something durable —

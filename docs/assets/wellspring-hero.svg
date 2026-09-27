@@ -1,0 +1,73 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 220">
+  <defs>
+    <linearGradient id="bg-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#0f172a"/>
+      <stop offset="100%" style="stop-color:#1e293b"/>
+    </linearGradient>
+    <linearGradient id="glow" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#4285f4;stop-opacity:0"/>
+      <stop offset="50%" style="stop-color:#f9ab00;stop-opacity:0.3"/>
+      <stop offset="100%" style="stop-color:#34a853;stop-opacity:0"/>
+    </linearGradient>
+  </defs>
+  <style>
+    @keyframes pulse-blue { 0%,100% { opacity: 0.7; } 50% { opacity: 1; } }
+    @keyframes pulse-gold { 0%,100% { opacity: 0.8; } 50% { opacity: 1; } }
+    @keyframes pulse-green { 0%,100% { opacity: 0.7; } 50% { opacity: 1; } }
+    @keyframes glow-line { 0%,100% { opacity: 0.2; } 50% { opacity: 0.6; } }
+    @keyframes arrow-blink { 0%,40% { opacity: 0.3; } 50%,90% { opacity: 1; } 100% { opacity: 0.3; } }
+    @keyframes arrow-blink-2 { 0%,40% { opacity: 0.3; } 50%,90% { opacity: 1; } 100% { opacity: 0.3; } }
+    .node-blue { animation: pulse-blue 3s ease-in-out infinite; }
+    .node-gold { animation: pulse-gold 2.5s ease-in-out infinite 0.3s; }
+    .node-green { animation: pulse-green 3s ease-in-out infinite 0.6s; }
+    .glow-bar { animation: glow-line 4s ease-in-out infinite; }
+    .arr1 { animation: arrow-blink 2s ease-in-out infinite; }
+    .arr2 { animation: arrow-blink-2 2s ease-in-out infinite 0.5s; }
+    .arr3 { animation: arrow-blink 2s ease-in-out infinite 1s; }
+  </style>
+  <!-- Background -->
+  <rect width="900" height="220" fill="url(#bg-grad)" rx="12"/>
+  <!-- Glow bar -->
+  <rect class="glow-bar" x="200" y="72" width="500" height="3" rx="1.5" fill="url(#glow)"/>
+  <!-- Title -->
+  <text x="450" y="58" text-anchor="middle" font-family="system-ui, -apple-system, sans-serif" font-size="44" font-weight="800" fill="#ffffff" letter-spacing="-1">Wellspring</text>
+  <!-- Subtitle -->
+  <text x="450" y="92" text-anchor="middle" font-family="system-ui, -apple-system, sans-serif" font-size="15" fill="#94a3b8" letter-spacing="3">DECENSOR · QUANTIZE · RUN LOCALLY</text>
+  <!-- Pipeline flow -->
+  <g transform="translate(115, 130)">
+    <!-- HF Hub node -->
+    <rect class="node-blue" x="0" y="0" width="110" height="56" rx="8" fill="#1e3a5f" stroke="#4285f4" stroke-width="2"/>
+    <text x="55" y="24" text-anchor="middle" font-family="system-ui, sans-serif" font-size="12" font-weight="700" fill="#93c5fd">HF Hub</text>
+    <text x="55" y="42" text-anchor="middle" font-family="system-ui, sans-serif" font-size="10" fill="#60a5fa">safetensors</text>
+    <!-- Arrow 1: static line + animated chevron -->
+    <line x1="114" y1="28" x2="134" y2="28" stroke="#475569" stroke-width="1.5"/>
+    <polygon class="arr1" points="134,22 146,28 134,34" fill="#f9ab00"/>
+    <!-- Heretic node -->
+    <rect class="node-gold" x="150" y="0" width="110" height="56" rx="28" fill="#422006" stroke="#f9ab00" stroke-width="2"/>
+    <text x="205" y="24" text-anchor="middle" font-family="system-ui, sans-serif" font-size="12" font-weight="700" fill="#fcd34d">Heretic</text>
+    <text x="205" y="42" text-anchor="middle" font-family="system-ui, sans-serif" font-size="10" fill="#f59e0b">abliterate</text>
+    <!-- Arrow 2: static line + animated chevron -->
+    <line x1="264" y1="28" x2="284" y2="28" stroke="#475569" stroke-width="1.5"/>
+    <polygon class="arr2" points="284,22 296,28 284,34" fill="#f9ab00"/>
+    <!-- Decensored node -->
+    <rect class="node-blue" x="300" y="0" width="110" height="56" rx="8" fill="#1e3a5f" stroke="#4285f4" stroke-width="2"/>
+    <text x="355" y="24" text-anchor="middle" font-family="system-ui, sans-serif" font-size="12" font-weight="700" fill="#93c5fd">Decensored</text>
+    <text x="355" y="42" text-anchor="middle" font-family="system-ui, sans-serif" font-size="10" fill="#60a5fa">merged · bf16</text>
+    <!-- Fork lines to MLX and GGUF (static) -->
+    <line x1="414" y1="16" x2="442" y2="6" stroke="#34a853" stroke-width="1.5"/>
+    <polygon class="arr3" points="442,-4 454,4 442,12" fill="#34a853"/>
+    <line x1="414" y1="40" x2="442" y2="50" stroke="#34a853" stroke-width="1.5"/>
+    <polygon class="arr3" points="442,44 454,52 442,60" fill="#34a853"/>
+    <!-- MLX output node -->
+    <rect class="node-green" x="458" y="-18" width="100" height="46" rx="8" fill="#052e16" stroke="#34a853" stroke-width="2"/>
+    <text x="508" y="0" text-anchor="middle" font-family="system-ui, sans-serif" font-size="11" font-weight="700" fill="#86efac">MLX</text>
+    <text x="508" y="16" text-anchor="middle" font-family="system-ui, sans-serif" font-size="9" fill="#4ade80">AWQ · Apple Silicon</text>
+    <!-- GGUF output node -->
+    <rect class="node-green" style="animation-delay: 0.3s" x="458" y="30" width="100" height="46" rx="8" fill="#052e16" stroke="#34a853" stroke-width="2"/>
+    <text x="508" y="48" text-anchor="middle" font-family="system-ui, sans-serif" font-size="11" font-weight="700" fill="#86efac">GGUF</text>
+    <text x="508" y="64" text-anchor="middle" font-family="system-ui, sans-serif" font-size="9" fill="#4ade80">imatrix · llama.cpp</text>
+    <!-- Runtime labels -->
+    <text x="572" y="8" font-family="system-ui, sans-serif" font-size="10" fill="#64748b">→ LM Studio · mlx-lm</text>
+    <text x="572" y="56" font-family="system-ui, sans-serif" font-size="10" fill="#64748b">→ Ollama · LM Studio</text>
+  </g>
+</svg>

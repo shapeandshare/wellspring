@@ -1,731 +1,427 @@
-# Wellspring: Heretic → MLX / GGUF Export Pipeline
+<div align="center">
 
-Decensors a Hugging Face language model with [Heretic](https://github.com/p-e-w/heretic)
-(automatic abliteration), then exports the result to two independent,
-locally-runnable formats:
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/wellspring-hero.svg">
+  <img src="docs/assets/wellspring-hero-light.svg" alt="Wellspring: Decensor → Quantize → Run Locally" width="100%">
+</picture>
 
-- **MLX** — quantized via mlx-vlm's AWQ calibration, for Apple Silicon (`mlx_vlm` / `mlx-lm` / LM Studio's MLX backend)
-- **GGUF** — imatrix-quantized via [`ik_llama.cpp`](https://github.com/ikawrakow/ik_llama.cpp), for `llama.cpp` / Ollama / LM Studio's GGUF backend
+<p>
+  <a href="https://www.python.org/downloads/"><img alt="Python 3.14" src="https://img.shields.io/badge/python-3.14-3776ab?style=for-the-badge&logo=python&logoColor=white"></a>&nbsp;
+  <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-ff9500?style=for-the-badge"></a>&nbsp;
+  <a href="https://github.com/p-e-w/heretic"><img alt="Heretic" src="https://img.shields.io/badge/heretic-1.4.0-f9ab00?style=for-the-badge"></a>&nbsp;
+  <a href="PROVENANCE.md"><img alt="Provenance tracked" src="https://img.shields.io/badge/provenance-tracked-34a853?style=for-the-badge"></a>&nbsp;
+  <a href="CONTRIBUTING.md"><img alt="Contributing" src="https://img.shields.io/badge/contributing-guide-2ea44f?style=for-the-badge"></a>
+</p>
 
-The two export paths never feed into each other — same source checkpoint in, completely separate calibration data, tools, and output directories.
+**Decensor a Hugging Face model with [Heretic](https://github.com/p-e-w/heretic), quantize with AWQ or imatrix, run locally on any hardware.**
 
-## Provenance & attribution
+<p>
+  <a href="#-quick-start"><kbd>&nbsp;Quick Start&nbsp;</kbd></a>&nbsp;
+  <a href="#-pipeline"><kbd>&nbsp;Pipeline&nbsp;</kbd></a>&nbsp;
+  <a href="#-compatibility"><kbd>&nbsp;Compatibility&nbsp;</kbd></a>&nbsp;
+  <a href="#-provenance"><kbd>&nbsp;Provenance&nbsp;</kbd></a>&nbsp;
+  <a href="COMPATIBILITY.md"><kbd>&nbsp;Full Docs&nbsp;</kbd></a>
+</p>
 
-For external audits: every external code, model, and dataset dependency
-this pipeline touches — exact versions/commits, licenses, and reproduction
-steps — is documented in **[`PROVENANCE.md`](PROVENANCE.md)** (chain of
-custody: model/dataset commits, per-run manifests) and
-**[`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md)** (code dependencies
-and their licenses, including one AGPL and one CC-BY-NC-4.0 flag worth
-reading before commercial use). `make lock` and `make notices` regenerate
-the two machine-readable artifacts those documents summarize
-(`requirements-lock.txt`, `third_party_licenses.json`).
+</div>
 
-## Governance
+<br>
 
-Project principles (provenance discipline, atomic operations, license
-awareness, simplicity-first) are codified in
-[`.specify/memory/constitution.md`](.specify/memory/constitution.md). It
-supersedes other docs on governance questions; this README, `PROVENANCE.md`,
-and `ROADMAP.md` remain the authoritative operational references it points to.
+<p align="center"><img src="docs/assets/divider.svg" alt="" width="100%"></p>
 
-[`AGENTS.md`](AGENTS.md) is the operating guide for AI coding agents working
-in this repository — what the constitution *permits*, versus what working on
-this codebase has actually *taught*. It records the failure modes worth
-remembering (verify delegated work landed on disk, fix generated artifacts at
-source, measure Hub figures instead of citing them) and defers to the
-constitution wherever the two touch.
+## ✨ What is Wellspring?
 
-[`vault/`](vault/wellspring.md) is the project's own governed knowledge
-vault — an [Obsidian](https://obsidian.md)-compatible collection of
-session-level decisions, non-obvious discoveries, and session logs
-produced while building this pipeline (constitution Article XIV). Open
-`vault/wellspring.md` in Obsidian for graph navigation, or `grep -ril
-"<topic>" vault/` for a quick text search. Run `make vault-audit` to check
-its mechanical integrity (frontmatter, tags, wikilinks).
+**Wellspring** takes any Hugging Face language model, removes its refusal behavior with [Heretic](https://github.com/p-e-w/heretic)'s automatic abliteration, and exports the result to **two independent, locally-runnable formats** — each with its own state-of-the-art quantization technique:
 
-## Presentation
+<p align="center">
+  <img src="docs/assets/quantization.svg" alt="MLX uses AWQ (Activation-Aware Weight Quantization) with real image calibration; GGUF uses imatrix (Importance Matrix k-Quantization) with text calibration" width="100%">
+</p>
 
-[`presentation/abliteration.md`](presentation/abliteration.md) is a
-conference talk built from this repository — abliteration and Heretic as the
-worked example, model chain-of-custody as the argument. 45 slides, 16
-animated inline-SVG diagrams, and ~5,250 words of speaker notes.
+| Export | Quantization Technique | Calibration Data | Platform | Run with |
+|--------|------------------------|------------------|----------|----------|
+| **🍎 MLX** | **AWQ** — preserves high-activation channels at full precision | Real COCO images | Apple Silicon | `mlx_vlm`, `mlx-lm`, LM Studio |
+| **🦙 GGUF** | **imatrix k-quants** — allocates bits proportional to weight importance | Alpaca instruction text | macOS, Linux | `llama.cpp`, Ollama, LM Studio |
 
-[`presentation/DESIGN.md`](presentation/DESIGN.md) documents the deck's
-design system, the diagram splice procedure, and the Marp/SVG traps worth
-knowing before editing it. Build with `make slides` — **HTML is the
-presentation format**; PDF and PPTX freeze one animation frame.
+The two paths never touch each other — same source in, completely separate calibration, tools, and outputs. Both techniques are data-driven: they profile the model on real data to decide *where* precision matters most, then concentrate bits there.
 
-## Requirements
+<br>
 
-This pipeline supports two tracks, depending on your hardware. Both run the
-same `make abliterate` step; they differ only in which export target(s) are
-available afterward.
+<p align="center"><img src="docs/assets/divider.svg" alt="" width="100%"></p>
+
+## 🚀 Quick Start
+
+Three commands to a decensored, locally-runnable model:
+
+> [!IMPORTANT]
+> **Hardware requirements vary by model size.** The default `Qwen/Qwen3.6-35B-A3B` needs 320GB+ combined VRAM (multi-GPU) or `QUANTIZATION=BNB_4BIT`. For dev iteration, use `make dev-abliterate` with `TinyLlama` (8GB VRAM).
+
+```bash
+git clone <repo-url> && cd wellspring
+make setup                    # create venv, install deps
+make doctor                   # verify hardware meets requirements
+make abliterate               # run heretic → decensored checkpoint
+```
+
+Then pick your export path — each uses a different data-driven quantization technique:
+
+```bash
+# 🍎 Apple Silicon → MLX (AWQ: calibrates on real images)
+make calibration-data && make convert-mlx
+make generate-mlx             # smoke test
+
+# 🦙 Any platform → GGUF (imatrix: profiles weight importance on text)
+make convert-gguf && make quantize-gguf
+# Load in llama.cpp, Ollama, or LM Studio
+```
+
+Just want quantization? Skip decensoring and export any local model as-is — manifests are tagged `decensored=false`:
+
+```bash
+hf download "$MODEL" --revision "$MODEL_COMMIT" --local-dir models/raw   # local copy (GGUF can't read a Hub ID)
+make convert-gguf quantize-gguf SKIP_DECENSOR=1 HF_PATH=models/raw
+python flow.py run --skip_decensor True --hf_path models/raw               # same, via Metaflow
+```
+
+<br>
+
+<p align="center"><img src="docs/assets/divider.svg" alt="" width="100%"></p>
+
+## 🎯 Features
+
+<table>
+<tr>
+<td width="33%" valign="top">
+
+**🔓 Automatic abliteration**<br>
+Heretic's Optuna-driven search finds optimal refusal-removal parameters. No manual intervention.
+
+</td>
+<td width="33%" valign="top">
+
+**📦 Dual export paths**<br>
+MLX for Apple Silicon, GGUF for everything else. Independent calibration, independent outputs.
+
+</td>
+<td width="33%" valign="top">
+
+**📋 Full provenance**<br>
+Every artifact gets a `.provenance.json` sidecar tracking commits, seeds, and parameters.
+
+</td>
+</tr>
+<tr>
+<td width="33%" valign="top">
+
+**📊 MLflow tracking**<br>
+Log trials, compare runs, audit metrics. Local SQLite or hosted server — your choice.
+
+</td>
+<td width="33%" valign="top">
+
+**🔄 Metaflow orchestration**<br>
+Resumable pipeline with `python flow.py resume`. Crash recovery built in.
+
+</td>
+<td width="33%" valign="top">
+
+**⚡ Multi-GPU support**<br>
+Accelerate auto-shards across GPUs. Run the full 35B model on `p4d.24xlarge` without quantization.
+
+</td>
+</tr>
+</table>
+
+<br>
+
+<p align="center"><img src="docs/assets/divider.svg" alt="" width="100%"></p>
+
+## 🔧 Pipeline
+
+<p align="center">
+  <img src="docs/assets/pipeline.svg" alt="Pipeline: HF Hub → Heretic abliteration → Decensored checkpoint → MLX (AWQ) and GGUF (imatrix) export paths with calibration data, quantization stages, and runtime targets" width="100%">
+</p>
+
+Every artifact node gets a `.provenance.json` sidecar — see [PROVENANCE.md](PROVENANCE.md).
+
+<br>
+
+<p align="center"><img src="docs/assets/divider.svg" alt="" width="100%"></p>
+
+## 📊 Compatibility
+
+| Model | Abliteration | MLX | GGUF | Notes |
+|-------|:------------:|:---:|:----:|-------|
+| `Qwen/Qwen3.6-35B-A3B` | ✅ | ✅ | ✅ | **Production default** — MoE + hybrid linear attention |
+| `TinyLlama/TinyLlama-1.1B-Chat-v1.0` | ✅ | ✅ | ❌ | Dev model — [GGUF bug on dense arch](COMPATIBILITY.md#bug-ik_llama-dense-llama-crash) |
+
+> [!NOTE]
+> **For detailed compatibility info** — pinned versions, hardware requirements, architecture matrix, and known bugs — see **[COMPATIBILITY.md](COMPATIBILITY.md)**.
+
+### Known Limitations
+
+- **GGUF on dense Llama**: `ik_llama.cpp@401a09d2` crashes with `KeyError: 'num_experts_per_tok'` on `LlamaForCausalLM`. MoE works.
+- **MLX VLM perplexity**: `mlx-lm` may not load vision-language checkpoints; text-only verified.
+
+<br>
+
+<p align="center"><img src="docs/assets/divider.svg" alt="" width="100%"></p>
+
+## 🏛️ Provenance
+
+Every external dependency — code, models, datasets — is tracked with exact versions/commits.
+
+| Document | What it covers |
+|----------|----------------|
+| [**PROVENANCE.md**](PROVENANCE.md) | Chain of custody: model/dataset commits, per-run manifests |
+| [**THIRD_PARTY_NOTICES.md**](THIRD_PARTY_NOTICES.md) | Code licenses — includes AGPL and CC-BY-NC-4.0 flags |
+| [**COMPATIBILITY.md**](COMPATIBILITY.md) | Detailed version matrix and known bugs |
+
+> [!WARNING]
+> **License flags worth reading before commercial use:**
+> - `heretic-llm` is **AGPL-3.0-or-later** (invoked as subprocess)
+> - `tatsu-lab/alpaca` calibration data is **CC-BY-NC-4.0**
+
+<br>
+
+<p align="center"><img src="docs/assets/divider.svg" alt="" width="100%"></p>
+
+## 🏗️ Governance
+
+| Document | Role |
+|----------|------|
+| [**Constitution**](.specify/memory/constitution.md) | Supreme project principles — provenance, atomicity, license awareness |
+| [**AGENTS.md**](AGENTS.md) | Operating guide for AI coding agents |
+| [**vault/**](vault/wellspring.md) | Obsidian knowledge base — decisions, discoveries, session logs |
+| [**docs/DESIGN.md**](docs/DESIGN.md) | Documentation design system — colors, SVGs, section structure |
+
+Run `make vault-audit` to check vault integrity.
+
+<br>
+
+<p align="center"><img src="docs/assets/divider.svg" alt="" width="100%"></p>
+
+## 💻 Requirements
 
 ### Track A — macOS / Apple Silicon
 
-Full pipeline: heretic abliteration + MLX export + GGUF export.
+Full pipeline: abliteration + MLX export + GGUF export.
 
-- macOS on Apple Silicon (MLX conversion needs it; the abliteration step uses the Metal backend)
-- Python 3.14 (`.python-version` pins this; install via `brew install python@3.14` if needed)
-- Homebrew `cmake` + `ninja` — only needed for the GGUF export path (`make build-llama-cpp`)
-- Disk: the heretic checkpoint alone is ~72GB (bf16) for the default model (`Qwen/Qwen3.6-35B-A3B`); budget for that plus whichever export(s) you run (MLX quantized copy, and/or GGUF F16 + quantized copies)
+- macOS on Apple Silicon
+- Python 3.14 (`.python-version` pins this)
+- Homebrew `cmake` + `ninja` for GGUF path
+- Disk: ~72GB for the default model checkpoint, plus export outputs
 
-### Track B — Linux + NVIDIA GPU (e.g. AWS EC2)
+### Track B — Linux + NVIDIA GPU
 
-heretic abliteration + GGUF export only. **MLX is not available** on this
-track — `mlx-vlm` is Apple/Metal only, and `convert-mlx`/`generate-mlx` now
-fail fast with a clear error message (instead of an obscure "command not
-found") if you run them here; use `make convert-gguf && make quantize-gguf`
-instead.
+Abliteration + GGUF export only. **MLX is not available** on this track.
 
-- A Linux instance with an NVIDIA GPU (e.g. an EC2 `g5`/`g6e`/`p4d`/`p5`
-  instance) and an up-to-date NVIDIA driver
-- Python 3.14 — no Homebrew on Linux, so install via `pyenv`, `uv`, or the
-  `deadsnakes` PPA (Ubuntu) instead
-- `sudo apt-get install cmake ninja-build` — needed for the GGUF export
-  path (`make build-llama-cpp`)
-- An NVIDIA driver + CUDA toolkit (`nvcc` on `PATH`) for the new
-  `GGML_CUDA` build path below — or use an
-  [AWS Deep Learning AMI](https://aws.amazon.com/machine-learning/amis/),
-  which ships these preinstalled
-- The default PyPI `torch` wheel on Linux already includes CUDA support
-  for common CUDA versions, so `pip install torch` (via `make setup`)
-  normally needs no special index URL — only reach for the
-  [pytorch.org selector](https://pytorch.org/get-started/locally/) if you
-  need an unusual CUDA version or ROCm
-- Disk: see "Disk sizing on EC2" below
+- Linux with NVIDIA GPU (EC2 `g5`/`p4d`/`p5`)
+- Python 3.14 via `pyenv`, `uv`, or deadsnakes PPA
+- `cmake` + `ninja-build`
+- NVIDIA driver + CUDA toolkit
 
-The Makefile auto-detects an NVIDIA GPU via `nvidia-smi` and, when present,
-builds `ik_llama.cpp` with CUDA enabled (`GGML_CUDA=ON`) and GPU-offloads
-the imatrix pass — see "Key variables" below for `GGML_CUDA`,
-`CUDA_ARCHITECTURES`, and `LLAMA_NGL`.
+**Multi-GPU instances for full-precision runs:**
+- `p4d.24xlarge` — 8× A100 40GB = 320GB VRAM
+- `p5.48xlarge` — 8× H100 80GB = 640GB VRAM
 
-**GPU-architecture auto-detection — recommend CMake >=3.24 + CUDA toolkit
->=11.6.** The build already passes `-DGGML_NATIVE=ON` unconditionally. On
-that combination of toolchain versions, `ik_llama.cpp`'s own CMakeLists
-(at the pinned `LLAMA_CPP_REF`) resolves `CMAKE_CUDA_ARCHITECTURES` to
-`"native"` — it auto-detects the exact compute capability of the GPU doing
-the build, correctly covering H100/H200 (compute capability 90) and
-L4/L40s/RTX-40-series (compute capability 89) with zero extra
-configuration. On an **older** CMake (<3.24) or CUDA toolkit (<11.6),
-though, it silently falls back to a hardcoded architecture list
-(`50;61;70;75;80`) that tops out at Ampere/A100 and does **not** include
-89 or 90 — a build on an L4/L40s or H100 instance with an older
-CMake/CUDA could silently miscompile or underperform for that GPU, with
-no warning from the build itself. Check with `cmake --version` /
-`nvcc --version`; if you're stuck on an older toolchain, set
-`CUDA_ARCHITECTURES` explicitly, e.g. `CUDA_ARCHITECTURES=89` for
-L4/L40s/RTX 40-series, or `CUDA_ARCHITECTURES=90` for H100/H200. `make doctor`
-checks your cmake/nvcc versions against this exact threshold and warns by
-name if a detected GPU needs this. See the `CUDA_ARCHITECTURES` row below
-and its Makefile comment for the full source citation.
+Run `make doctor` to verify your hardware meets requirements.
 
-### Running the full-precision model on large-VRAM / multi-GPU EC2 instances
+### Disk Sizing on EC2
 
-Keep the default `QUANTIZATION=NONE` — do **not** switch to `BNB_4BIT`
-just to make a large model fit; that trades away model quality. heretic's
-own default `device_map="auto"` (Hugging Face Accelerate) already
-automatically shards the ~72GB bf16 default model (`Qwen/Qwen3.6-35B-A3B`)
-across every GPU visible to the process, with zero extra flags required —
-this already solves "large model, no quantization" as long as your
-instance has enough *combined* VRAM across all its GPUs.
+> [!WARNING]
+> **Set `HF_HOME` before you run anything.** The model cache defaults to `~/.cache/huggingface` — if that's on a small root volume, the ~72GB download silently fills it.
 
-Concrete EC2 instance types with enough combined VRAM to hold that
-checkpoint plus working memory (activations, optimizer state during
-abliteration, etc.) without quantization:
-
-- `p4d.24xlarge` — 8x A100 40GB = 320GB total VRAM
-- `p5.48xlarge` — 8x H100 80GB = 640GB total VRAM
-
-A single-GPU instance (e.g. `g5`/`g6e`) does not have enough VRAM for the
-default model at full precision and will need `QUANTIZATION=BNB_4BIT`
-instead, if you explicitly accept the quality tradeoff for that model size.
-
-**System RAM on this path**: heretic only loads a full CPU copy of the base
-model (for CPU-side merge/dequantization, a ~3x-parameter-count RAM spike
-per heretic's own rule of thumb) when `QUANTIZATION=BNB_4BIT` — that spike
-does **not** apply to the `QUANTIZATION=NONE` path recommended here.
-Accelerate's sharded loading and its `offload_outputs_to_cpu` analysis-tensor
-staging still use host RAM transiently on any path, though, so as a simple
-rule of thumb, system RAM should comfortably exceed the model's on-disk
-size. The `p4d.24xlarge` (1.1TB RAM) / `p5.48xlarge` (2TB RAM) instances
-above vastly exceed this for the default ~72GB model, so RAM is not a
-binding constraint on those specific instance types.
-
-For advanced per-GPU tuning on a multi-GPU box (e.g. pinning everything to
-one device, or capping per-GPU memory on a heterogeneous mix of GPUs), the
-Makefile now exposes optional `DEVICE_MAP` and `MAX_MEMORY` passthrough
-variables — both empty (no-op) by default, so the default path above is
-unchanged unless you explicitly set them. The flag names (`--device-map`/
-`--max-memory`) are confirmed correct via heretic's `src/heretic/config.py`
-(`cli_kebab_case=True` in its `CliSettingsSource(...)` call — the same
-mechanism behind the already-used `--quantization`/`--model-commit`/
-`--export-strategy` flags). See "Key variables" below for the `MAX_MEMORY`
-value-format example.
-
-Run `make doctor` first to confirm the instance actually has enough
-CPU/RAM/disk/VRAM before starting a multi-hour `make abliterate` run.
-
-### Dev cycle (cheap iteration)
-
-Iterating on this pipeline's own scripts/Makefile plumbing does not require
-the production model's hardware. `make dev-abliterate` runs the same
-`abliterate` recipe against `DEV_MODEL` (default:
-`TinyLlama/TinyLlama-1.1B-Chat-v1.0`) instead of `MODEL` — a plain dense
-Llama-2 architecture (no MoE, no hybrid linear attention), ~2.2GB bf16,
-1.1B params:
-
-```sh
-make dev-doctor                 # checks CPU/RAM/disk/VRAM against DEV_MODEL-sized floors
-make dev-abliterate             # abliterates DEV_MODEL, not MODEL
-make convert-gguf HF_PATH=outputs/TinyLlama-TinyLlama-1.1B-Chat-v1.0-heretic
-make quantize-gguf
-```
-
-**Hardware**: a single entry-level GPU is enough — e.g. an EC2 `g5.xlarge`
-(1x A10G, 24GB VRAM). No multi-GPU sharding, no 300GB+ combined-VRAM floor,
-no 400GB disk budget. `make dev-doctor` checks against `DEV_PREFLIGHT_ARGS`
-(default: `--min-vram-gb 8 --min-disk-gb 30`) instead of `make doctor`'s
-production-sized defaults, which would otherwise WARN/FAIL against a box
-this small for no good reason.
-
-**`MODEL`'s own default is deliberately untouched.** `dev-abliterate` is a
-separate target with a separate `DEV_MODEL` variable, not a change to
-`MODEL ?= Qwen/Qwen3.6-35B-A3B` — a bare `make abliterate` (including on a
-real audited run where someone forgot to pass `MODEL=`) must never silently
-abliterate the wrong model.
-
-**`make dev-abliterate-e2e` fully automates the interactive prompts** (trial
-selection, save-vs-upload-vs-chat menu, save path) via `expect`
-(`scripts/heretic_automate.exp`) — useful for CI or unattended dev-cycle runs,
-where `make dev-abliterate` would otherwise block on stdin:
-
-```sh
-make dev-abliterate-e2e         # non-interactive: auto-selects first trial, saves to DEV_OUT_DIR
-```
-
-**Apple Silicon (MPS) needs `DEVICE_MAP=cpu`.** Heretic's abliteration step
-calls `torch.svd_lowrank()` (`vendor/heretic/src/heretic/model.py`), which has
-no native MPS kernel — on PyTorch 2.14.0 this doesn't error or fall back, it
-**hangs indefinitely** at 0% CPU during "Abliterating..." on trial 1.
-`PYTORCH_ENABLE_MPS_FALLBACK=1` does **not** help (confirmed empirically — the
-hang is identical with or without it, so the op isn't reaching PyTorch's CPU
-fallback path). The confirmed workaround is heretic's own `--device-map`
-setting, wired through as the `DEVICE_MAP` variable (see "Key variables"
-below):
-
-```sh
-make dev-abliterate-e2e DEVICE_MAP=cpu   # forces the whole model onto CPU; slow but doesn't hang
-```
-
-This is a **dev-cycle-only workaround**, not a fix for real abliteration
-runs — CPU-only execution took over 10 minutes just to reach trial 1's
-evaluation step for TinyLlama's 1.1B params, and would be impractically slow
-for the production model. Track B (Linux + NVIDIA CUDA) remains the only
-practical path for abliterating the production `MODEL` — see "Requirements"
-above.
-
-**What this validates, and what it doesn't.** heretic's own module-discovery
-code (`vendor/heretic/src/heretic/model.py`) checks standard
-`attn.o_proj`/`mlp.down_proj` — the plain dense-model case TinyLlama exercises
-— before any of its MoE/hybrid-specific fallbacks (Qwen3.5 linear attention,
-Qwen3/Phi-3.5 experts, LFM, Granite MoE Hybrid), so this is a real exercise of
-heretic's core abliteration path, the Makefile's provenance-manifest writing,
-and the calibration fetch scripts. It does **not** exercise: the hybrid
-linear-attention/MoE tensor conversion `ik_llama.cpp` was specifically chosen
-over mainline llama.cpp to handle (see "GGUF toolchain choice" below), or
-heretic's `device_map="auto"` multi-GPU sharding (TinyLlama fits on one GPU).
-
-**The GGUF quantize flow is currently broken for TinyLlama specifically** —
-confirmed via a real end-to-end run: `make convert-gguf` against a real
-TinyLlama checkpoint fails with `KeyError: 'num_experts_per_tok'` at the
-pinned `ik_llama.cpp` commit. `LlamaModel` (the converter class handling
-`LlamaForCausalLM`/`MistralForCausalLM`/`MixtralForCausalLM`) unconditionally
-assumes a MoE-specific hparams field exists, which TinyLlama's plain dense
-`config.json` doesn't have. This is a bug in the pinned fork, not a
-configuration error here — see the vault discovery note for the full trace.
-The production model (a MoE architecture) is not expected to hit this same
-crash, but that has not been independently verified. Treat a
-`dev-abliterate` pass as necessary, not sufficient — run at least one real
-`make abliterate` against the production `MODEL` on adequate hardware (see
-above) before trusting the pipeline end-to-end.
-
-### Disk sizing on EC2
-
-EC2 default root (EBS) volumes are far smaller than this pipeline needs,
-and EC2 instances commonly mount a large data volume separately from a
-small root volume.
-
-**Set `HF_HOME` before you run anything.** Hugging Face's model-download
-cache defaults to `$HF_HOME`, or `~/.cache/huggingface` if `HF_HOME` is
-unset — a location completely independent of this repo's `OUT_DIR`/
-`GGUF_OUT_DIR`. If you don't redirect `HF_HOME` to whichever volume
-actually has the space, the ~72GB raw model download can silently fill up
-a small root volume even though `OUT_DIR`/`GGUF_OUT_DIR` point at plenty
-of free space on the big one:
-
-```sh
+```bash
 export HF_HOME=/data/hf-cache   # point at whichever volume has the space
-make abliterate
 ```
-
-For a full GGUF run with the default model and default `GGUF_QUANTS`, the
-disk cost breaks down as:
 
 | Component | Size |
-|---|---|
-| HF Hub raw download cache (`HF_HOME`) | ~72GB |
-| heretic's merged `OUT_DIR` export | ~72GB |
+|-----------|------|
+| HF Hub cache (`HF_HOME`) | ~72GB |
+| Heretic merged output | ~72GB |
 | Full-resolution GGUF (F16) | ~72GB |
-| `Q4_K_M` quant | ~4.5GB |
-| `Q8_0` quant | ~38GB |
+| Quantized GGUFs | ~4–38GB each |
 | **Total** | **~260GB minimum** |
 
-Budget **at least 400GB** of gp3 EBS (split across `HF_HOME` and the
-output volume as appropriate) to leave real headroom for the OS, heretic's
-Optuna study checkpoints, logs, and swap. `make doctor` checks free space
-at both the pipeline's output path and the resolved HF cache path (and
-flags it if they happen to share a filesystem) against this 400GB floor.
+Budget **at least 400GB** of gp3 EBS. `make doctor` checks free space.
 
-## Quick start
+### Dev Cycle (Cheap Iteration)
 
-```sh
-git clone <this-repo-url> && cd wellspring
-make setup                                     # create ./.venv, install requirements.txt
-make abliterate                                # run heretic against MODEL (default: Qwen/Qwen3.6-35B-A3B)
+```bash
+make dev-doctor      # check against TinyLlama-sized floors
+make dev-abliterate  # runs against DEV_MODEL, not MODEL
 ```
 
-`make setup` best-effort populates `vendor/heretic` too — a read-only,
-pinned copy of heretic's own source kept for local reference (e.g.
-codegraph indexing). It's optional and never blocks: if you're offline,
-building from a tarball with no `.git`, or on a CI runner without git
-submodule support, `make setup` warns and continues — the pipeline's
-actual runtime dependency is `heretic-llm` from PyPI (installed by the
-same `make setup`), not this directory. Populate it manually any time
-with `git submodule update --init vendor/heretic`. See `PROVENANCE.md` §5.
+Works on a single 8GB GPU (e.g., EC2 `g5.xlarge`).
 
-`heretic` will interactively ask what to do with the result near the end of
-the run (save/upload/chat/benchmark) — choose save, then enter a path (a
-natural choice is the one `make help`/the command output suggests). It will
-**not** ask you to choose merge-vs-adapter — that's already fixed by
-`--export-strategy MERGE` in the Makefile.
+> [!TIP]
+> **Apple Silicon (MPS) hangs during abliteration** — `torch.svd_lowrank()` has no MPS kernel. Workaround: `make dev-abliterate-e2e DEVICE_MAP=cpu` (slow but works). See [COMPATIBILITY.md](COMPATIBILITY.md) for details. Track B (Linux + CUDA) is the only practical path for production models.
 
-Then pick one or both export paths:
+<br>
 
-```sh
-make calibration-data && make convert-mlx      # -> MLX_OUT_DIR, for Apple Silicon
-make convert-gguf && make quantize-gguf        # -> GGUF_OUT_DIR, for llama.cpp/Ollama/LM Studio
-                                                # (or just `make gguf` to run both in one go)
-```
+<p align="center"><img src="docs/assets/divider.svg" alt="" width="100%"></p>
 
-`convert-gguf` and `quantize-gguf` are deliberately separate: `convert-gguf`
-does the expensive HF→GGUF pass once and writes a full-resolution
-(unquantized) GGUF; `quantize-gguf` reads that file back in and produces the
-actual quant levels (`GGUF_QUANTS`, default `Q4_K_M Q8_0`). Want a different
-quant level later? Re-run `make quantize-gguf GGUF_QUANTS="..."` — it never
-repeats the expensive conversion.
+## 📈 MLflow Tracking
 
-Smoke-test the MLX output:
+Set up experiment tracking before your first optimization run:
 
-```sh
-make generate-mlx
-```
-
-(GGUF has no `make` runtime target yet — load `GGUF_OUT_DIR/model-Q4_K_M.gguf` etc. directly in `llama.cpp`, Ollama, or LM Studio.)
-
-## MLflow: experiment tracking, auditability, and cross-run review
-
-`make log-abliteration-mlflow`, `make optimize-mlx`, and `make optimize-gguf`
-each record one MLflow run per trial — this is how you get auditability and
-review across runs, not just within one invocation. **Set this up before
-your first optimization/logging run**, not after, since `MLFLOW_TRACKING_URI`
-has no default and every one of these targets fails fast (exit 1) if it's
-unset.
-
-### Choose local (offline) or hosted — both are first-class, nothing else changes
-
-```sh
-# Local, offline, single-machine — a SQLite file, no server process to run
+```bash
+# Local SQLite (single machine)
 export MLFLOW_TRACKING_URI=sqlite:///mlflow.db
 
-# Hosted — a real tracking server, e.g. shared by a team or CI
-export MLFLOW_TRACKING_URI=http://localhost:5000   # or any reachable server URL
+# Or hosted server (team/CI)
+export MLFLOW_TRACKING_URI=http://localhost:5000
 ```
 
-Set this once per shell session (or in CI config) before running any of the
-three targets above; every one of them reads it from the environment and
-never accepts it as a Makefile variable with a default, so a forgotten
-export fails immediately with a clear message rather than silently writing
-to (or skipping) the wrong store. **Use a hosted server, not a local
-SQLite file, if more than one person/machine needs to review the same
-trials** — a local `sqlite:///mlflow.db` is only visible on the machine that
-wrote it.
+Then run logging/optimization:
 
-Credentials (`MLFLOW_TRACKING_USERNAME` / `MLFLOW_TRACKING_PASSWORD` /
-`MLFLOW_TRACKING_TOKEN`) are read directly by the `mlflow` Python library
-from the environment — never pass them as a Makefile variable or CLI flag,
-and none of this pipeline's scripts accept them (FR-014).
+```bash
+make log-abliteration-mlflow  # log Heretic trials to MLflow
+make optimize-mlx             # MLX quantization search
+make optimize-gguf            # GGUF quantization search
+```
 
-### What's recorded, and where
+View results:
 
-| Experiment (under `MLFLOW_EXPERIMENT_PREFIX`, default `wellspring`) | Populated by | Per-trial params | Per-trial metrics |
-|---|---|---|---|
-| `<prefix>-abliteration` | `make log-abliteration-mlflow` (reads Heretic's own Optuna journal) | Heretic's Optuna `trial.params` | `kl_divergence_value`, `refusals_value`, `refusals_baseline_value`, `n_bad_prompts` |
-| `<prefix>-mlx-quant` | `make optimize-mlx` | MLX quant search params | perplexity, refusal-rate |
-| `<prefix>-gguf-quant` | `make optimize-gguf` | `GGUF_QUANT`, `calib_text_samples` | `perplexity`, `refusal_rate` |
-
-Every run is also tagged with `trial_number`; abliteration runs additionally
-carry `journal_identity` (a hash of the journal file's path) so a run can be
-traced back to the exact journal it came from.
-
-### Re-running logging is safe — idempotent by design
-
-`make log-abliteration-mlflow` checks MLflow itself
-(`mlflow.search_runs(filter_string="tags.journal_identity = ... and
-tags.trial_number = ...")`) before creating a run, and skips any
-(journal, trial) pair already logged. Re-run it as often as you like —
-after a crash, on a schedule, or just to pick up newly-completed trials —
-it never produces duplicate rows (FR-002).
-
-### Reviewing and comparing across runs
-
-Point the MLflow UI at the same `MLFLOW_TRACKING_URI` you used for logging:
-
-```sh
+```bash
 mlflow ui --backend-store-uri "$MLFLOW_TRACKING_URI"
 ```
 
-Because the store is persistent across invocations, this shows every trial
-ever logged to that experiment — not just the most recent run — so you can
-compare params vs. metrics across the full history (e.g. every `GGUF_QUANT`
-choice ever tried vs. its `perplexity`/`refusal_rate` tradeoff). The same
-`mlflow.search_runs()` API used for idempotency is also the tool for
-scripted cross-run audits, e.g. every abliteration trial above a KL-divergence
-threshold, or every GGUF trial below a target refusal rate.
+**Re-running is safe** — logging is idempotent by design (FR-002).
 
-**MLflow metrics alone don't prove which exact artifact produced a score** —
-for that, cross-reference the sidecar `<name>.provenance.json` (records
-`wellspring_commit`, `wellspring_dirty`, and pinned tool commits like
-`ik_llama.cpp`'s) and the `manifest.json` in each search's
-`*-optimize-archive/` directory, which links trial number → archived file →
-metrics → timestamp. See [`PROVENANCE.md`](PROVENANCE.md) for the full
-chain-of-custody model.
+<br>
 
-## Pipeline
+<p align="center"><img src="docs/assets/divider.svg" alt="" width="100%"></p>
 
-```mermaid
-flowchart TD
-    classDef fmt fill:#e8f0fe,stroke:#4285f4,color:#1a1a1a
-    classDef proc fill:#fef7e0,stroke:#f9ab00,color:#1a1a1a
-    classDef opt fill:#fce8e6,stroke:#ea4335,color:#1a1a1a,stroke-dasharray: 3 3
-    classDef runtime fill:#e6f4ea,stroke:#34a853,color:#1a1a1a
+## ⚙️ Orchestration (Metaflow)
 
-    SRC["HF Hub model<br/>MODEL=org/name<br/>format: safetensors<br/>(dtype per source config)"]:::fmt
-    P1(("make abliterate<br/>heretic"))
-    OPT1["--quantization<br/>NONE / BNB_4BIT<br/>--export-strategy MERGE<br/>(hardcoded, not a var)"]:::opt
-    HF["HF_PATH<br/>outputs/&lt;model&gt;-heretic/<br/>format: safetensors<br/>(decensored, merged; bf16 for the<br/>default model)"]:::fmt
+The pipeline is also available as a Metaflow flow:
 
-    SRC --> P1
-    OPT1 -.-> P1
-    P1 --> HF
-
-    subgraph MLXBR[" MLX export — independent "]
-        direction TD
-        CD["make calibration-data<br/>COCO val images"]:::proc
-        CI["calibration-images/<br/>format: JPEG"]:::fmt
-        P2(("make convert-mlx<br/>mlx_vlm.convert"))
-        OPT2["--quant-method awq/rtn<br/>--calibration multimodal/text<br/>--q-bits N (e.g. 4, 8)<br/>--q-group-size N"]:::opt
-        MLX["MLX_OUT_DIR<br/>&lt;HF_PATH&gt;-mlx/<br/>format: MLX safetensors<br/>(quantized)"]:::fmt
-        P3(("make generate-mlx"))
-        RT1["Apple MLX runtime<br/>mlx_vlm / mlx-lm / LM Studio (MLX)<br/>Apple Silicon only"]:::runtime
-
-        CD --> CI
-        CI -. optional, AWQ only .-> P2
-        OPT2 -.-> P2
-        P2 --> MLX
-        MLX --> P3
-        P3 --> RT1
-    end
-
-    subgraph GGUFBR[" GGUF export — independent "]
-        direction TD
-        LC["make build-llama-cpp<br/>ik_llama.cpp fetch (pinned commit)+build"]:::proc
-        P4(("make convert-gguf<br/>convert_hf_to_gguf.py"))
-        OPT3["--outtype f16/bf16/f32/auto<br/>(GGUF_F16_TYPE, non-quantized only —<br/>convert-gguf rejects any other value)"]:::opt
-        F16["model-f16.gguf<br/>format: GGUF (F16, full resolution)"]:::fmt
-        RT2["llama.cpp / Ollama / LM Studio (GGUF)<br/>broad compatibility<br/>(no `make` target yet — load directly)"]:::runtime
-
-        LC --> P4
-        OPT3 -.-> P4
-        P4 --> F16
-
-        subgraph QUANTGGUF[" make quantize-gguf — separate, re-runnable "]
-            direction TD
-            CT["make calibration-text<br/>Alpaca instructions"]:::proc
-            CTF["calibration-text.txt<br/>format: plain UTF-8 text"]:::fmt
-            P5(("llama-imatrix"))
-            IM["imatrix.dat<br/>format: llama.cpp imatrix"]:::fmt
-            P6(("llama-quantize<br/>--imatrix imatrix.dat"))
-            OPT4["type = Q4_K_M/Q5_K_M/<br/>Q6_K/Q8_0/... (GGUF_QUANTS list)"]:::opt
-            GQ["model-*.gguf<br/>format: GGUF<br/>(k-quant + imatrix)"]:::fmt
-
-            CT --> CTF
-        end
-
-        LC --> P5
-        LC --> P6
-        F16 --> P5
-        CTF --> P5
-        P5 --> IM
-        F16 --> P6
-        IM --> P6
-        OPT4 -.-> P6
-        P6 --> GQ
-        GQ --> RT2
-    end
-
-    HF --> P2
-    HF --> P4
-```
-
-Every artifact node above (`HF`, `MLX`, `F16`, `GQ`, `CI`, `CTF`) also gets
-a sidecar `<name>.provenance.json` recording exactly what produced it
-(commits, seeds, parameters) — see [`PROVENANCE.md`](PROVENANCE.md).
-
-## Makefile targets
-
-| Target | Does |
-|---|---|
-| `make setup` | Create `./.venv` (Python 3.14), install `requirements.txt`, and best-effort populate `vendor/heretic` (never blocks — see `make vendor-heretic`) |
-| `make venv` / `make install` | Granular halves of `setup`'s environment setup |
-| `make vendor-heretic` | Populate the `vendor/heretic` reference submodule; warns and continues (never fails the build, always exits `0`) if offline, tarball-checked-out, submodules are unsupported, or the remote is unreachable — bounded to `VENDOR_HERETIC_TIMEOUT` seconds (default `20`) rather than hanging on a firewalled/unroutable host |
-| `make test` | Run the `pytest` suite (`tests/`) — required to pass before any change touching `scripts/`, per the [constitution](.specify/memory/constitution.md)'s Article IX |
-| `make abliterate` | Run `heretic` against `MODEL` with merge pre-selected; you still interactively choose to save and enter a path |
-| `make dev-abliterate` | Same recipe, against `DEV_MODEL` instead of `MODEL` — cheap single-GPU dev-cycle iteration; see "Dev cycle (cheap iteration)" above |
-| `make dev-abliterate-e2e` | Same as `dev-abliterate`, but drives heretic's interactive prompts non-interactively via `expect` (auto-selects the first trial, saves to `DEV_OUT_DIR`) — for CI/unattended runs; on Apple Silicon MPS, pass `DEVICE_MAP=cpu` to avoid a `torch.svd_lowrank()` hang (see "Dev cycle (cheap iteration)" above). Runs via the orchestrated `flow.py` internally (`decensor` + `log_to_mlflow` steps) — see `specs/002-metaflow-migration/`; also startable directly via `python flow.py run --only_step decensor,log_to_mlflow ...`, bypassing `make` entirely (required for production use) |
-| `make log-abliteration-mlflow` | Log every completed trial from Heretic's Optuna journal (`STUDY_CHECKPOINT_DIR/<model>.jsonl`) to MLflow under experiment `MLFLOW_EXPERIMENT_PREFIX-abliteration`; idempotent — re-running against the same journal adds no duplicate runs (FR-002). Requires `MLFLOW_TRACKING_URI` to be set. Runs via the orchestrated `flow.py` internally (`log_to_mlflow` step) — also startable directly via `python flow.py run --only_step log_to_mlflow ...`, bypassing `make` entirely |
-| `make calibration-data` | Fetch `CALIB_SAMPLES` real COCO images into `calibration-images/`, for MLX AWQ calibration |
-| `make convert-mlx` | Convert `HF_PATH` → MLX format (`MLX_OUT_DIR`), AWQ-quantized by default |
-| `make optimize-mlx` | Multi-objective quantization search for MLX: runs `N_TRIALS_MLX` Optuna trials (NSGA-II, resumable) scoring perplexity and refusal-rate independently for each archived trial; stores study in `MLX_OUT_DIR-optimize-archive/study.db`. Requires `MLFLOW_TRACKING_URI`. macOS/Apple Silicon only. Runs via the orchestrated `flow.py` internally (`mlx_search` step) — also startable directly via `python flow.py run --only_step mlx_search ...`, bypassing `make` entirely |
-| `make generate-mlx` | Smoke-test the MLX output with a short generation |
-| `make paper` | Fetch the pinned reference paper (Arditi et al. 2024, arXiv:2406.11717v3) into `references/`, plus a tracked `.provenance.json` sidecar; the PDF itself is git-ignored (arXiv non-exclusive license — see `PROVENANCE.md`) |
-| `make build-llama-cpp` | Fetch (pinned commit) + build `ik_llama.cpp` (`llama-imatrix`, `llama-quantize`) |
-| `make convert-gguf` | Convert `HF_PATH` → full-resolution `GGUF_F16_GGUF` (no quantization); rejects a quantized `GGUF_F16_TYPE` |
-| `make calibration-text` | Fetch `CALIB_TEXT_SAMPLES` chat/instruction rows into `calibration-text.txt`, for GGUF imatrix calibration |
-| `make quantize-gguf` | imatrix + quantize `GGUF_F16_GGUF` → `GGUF_QUANTS` levels in `GGUF_OUT_DIR`; re-runnable with a different `GGUF_QUANTS` without repeating `convert-gguf` |
-| `make gguf` | `convert-gguf`, then (strictly after, even under `make -j`) `quantize-gguf` |
-| `make optimize-gguf` | Multi-objective GGUF quantization search: runs `N_TRIALS_GGUF` Optuna (NSGA-II) trials scoring `(perplexity, refusal_rate)` — never repeats `convert-gguf` per trial (reuses `GGUF_F16_GGUF`); archives each trial's `.gguf` to `GGUF_OUT_DIR`-gguf-optimize-archive/; resumes from persistent `study.db` on re-run. Runs on macOS or Linux, CPU or GPU: when `GGML_CUDA=ON` (auto-detected via `nvidia-smi`, same as `build-llama-cpp`/`quantize-gguf`), both `llama-perplexity` and `llama-cli` are GPU-offloaded via `-ngl $(LLAMA_NGL)`; CPU-only otherwise. Disk footprint: `N_TRIALS_GGUF` attempts × one quantized GGUF file's typical size for the chosen quant level (e.g. ~4.5 GB for Q4\_K\_M, ~38 GB for Q8\_0). Requires `MLFLOW_TRACKING_URI` to be set. Runs via the orchestrated `flow.py` internally (`gguf_search` step) — also startable directly via `python flow.py run --only_step gguf_search ...`, bypassing `make` entirely |
-| `make optimize [OPTIMIZE_PARALLEL=0\|1]` | `mlx_search` then `gguf_search`, via one orchestrated `flow.py run --only_step mlx_search,gguf_search` invocation. Default (`OPTIMIZE_PARALLEL=0`): sequential (`--max-workers 1`) — `gguf_search` never starts until `mlx_search` finishes (safe when both searches share one compute resource, e.g. one local machine or hosted instance). `OPTIMIZE_PARALLEL=1`: concurrent (`--max-workers 16`, Metaflow's own default) — only use this when each search has its own separate, dedicated compute resource (e.g. a cluster/orchestrated-compute scenario assigning each search its own node); this is never auto-detected, it's an explicit operator-supplied signal. Also startable directly via `python flow.py run --only_step mlx_search,gguf_search --max-workers <1\|16> ...`, bypassing `make` entirely (FR-015, SC-006) |
-| `make lock` | Freeze exact installed package versions → `requirements-lock.txt` |
-| `make notices` | Regenerate the full third-party license manifest → `third_party_licenses.json` |
-| `make clean` | Remove `./.venv` |
-| `make slides` | Render the slide deck (`presentation/abliteration.md`) → `presentation/dist/*.html`. HTML is the presentation format — the animated inline-SVG diagrams and slide transitions only run there |
-| `make slides-pdf` | Same deck → PDF. Needs a real browser for export; autodetects Playwright's managed Chromium, or set `CHROME_PATH` |
-| `make slides-watch` | Live-reload preview server for the deck |
-| `make doctor` | Check CPU/RAM/disk/GPU-VRAM against this pipeline's needs (stdlib-only, runs before `./.venv` exists) — see [`scripts/preflight_check.py`](scripts/preflight_check.py) |
-| `make dev-doctor` | Same check, against `DEV_PREFLIGHT_ARGS`'s lower floors instead of `PREFLIGHT_ARGS` |
-
-Run `make help` any time for the same summary with your current variable values resolved in.
-
-## Key variables
-
-All have sane defaults; override on the command line, e.g. `make convert-mlx Q_BITS=4`.
-
-| Variable | Default | Meaning |
-|---|---|---|
-| `MODEL` | `Qwen/Qwen3.6-35B-A3B` | HF model to abliterate |
-| `MODEL_COMMIT` | `null` (unpinned) | Exact Hub commit of `MODEL` — deliberately not pinned by default (a fixed SHA is only valid for one specific `MODEL`); see `PROVENANCE.md` §2 for the commit matching the default model |
-| `QUANTIZATION` | `NONE` | Heretic load-time quantization (`NONE` \| `BNB_4BIT`) |
-| `SEED` | `42` | Heretic's optimizer seed (fixed for reproducible/idempotent re-runs) |
-| `MLFLOW_TRACKING_URI` | *(empty — required)* | MLflow tracking server URI (e.g. `http://localhost:5000` or `sqlite:///mlflow.db`); must be set before running `make log-abliteration-mlflow`. Credentials (`MLFLOW_TRACKING_USERNAME`/`PASSWORD`/`TOKEN`) are read directly by the `mlflow` library — never set as a Makefile variable |
-| `MLFLOW_EXPERIMENT_PREFIX` | `wellspring` | Prefix for MLflow experiment names; abliteration trials land under `<prefix>-abliteration`; MLX quantization search trials land under `<prefix>-mlx-quant` |
-| `N_TRIALS_MLX` | `15` | Attempt budget for `make optimize-mlx` — how many Optuna trials the MLX quantization search runs per invocation (resumed runs count existing trials toward this budget). Disk footprint estimate: ~`N_TRIALS_MLX` × (typical quantized MLX export size for your model) — e.g. for a 4-bit `Q_BITS=4` export of the default Qwen model, each trial's archived directory contributes roughly the same footprint as one `make convert-mlx` output |
-| `N_TRIALS_GGUF` | `15` | Attempt budget for `make optimize-gguf` — how many Optuna trials the GGUF quantization search runs per invocation (resumed runs count existing trials toward this budget; FR-008/FR-016). Approximate disk footprint: `N_TRIALS_GGUF` attempts × one quantized GGUF file's typical size for the chosen quant level — e.g. ~4.5 GB/trial for Q4\_K\_M, ~38 GB/trial for Q8\_0; multiply by 15 (default) to size the archive before starting |
-| `STUDY_CHECKPOINT_DIR` | `checkpoints` | Directory where Heretic writes its Optuna journal (matches Heretic's own `--study-checkpoint-dir` default); `make log-abliteration-mlflow` reads the journal from here |
-| `OPTIMIZE_PARALLEL` | `0` | Compute-topology switch for `make optimize` — `0` (default) runs `optimize-mlx`/`optimize-gguf` sequentially (safe when both share one compute resource); `1` runs them concurrently via `make -j2` (only when each search has its own dedicated compute resource). Never auto-detected — an explicit, operator-supplied signal (FR-015). Note: this is a distinct `0`/`1` boolean-integer convention, not a literal match to `GGML_CUDA`'s `ON`/`OFF` string convention above |
-| `GOOD_PROMPTS_COMMIT` / `BAD_PROMPTS_COMMIT` / `GOOD_EVAL_PROMPTS_COMMIT` / `BAD_EVAL_PROMPTS_COMMIT` | pinned commit SHAs | Heretic's own internal optimization/evaluation prompt datasets — see `PROVENANCE.md` §3 |
-| `GOOD_PROMPTS_SPLIT` / `GOOD_PROMPTS_COLUMN` / `BAD_PROMPTS_SPLIT` / `BAD_PROMPTS_COLUMN` | `train[:400]` / `text` (both pairs) | Must be passed explicitly alongside `--*.dataset`/`--*.commit` — matches heretic's own class-level defaults for these two optimization datasets, but a partially-specified nested CLI object silently drops these to `None` otherwise; see `PROVENANCE.md` §3 |
-| `GOOD_EVAL_PROMPTS_SPLIT` / `GOOD_EVAL_PROMPTS_COLUMN` / `BAD_EVAL_PROMPTS_SPLIT` / `BAD_EVAL_PROMPTS_COLUMN` | `test[:100]` / `text` (both pairs) | Same as above, for the two evaluation datasets |
-| `HF_PATH` | `OUT_DIR` (heretic's output) | Shared input to both export paths |
-| `QUANT_METHOD` | `awq` | MLX quantization method (`awq` \| `rtn`) |
-| `CALIBRATION` | `multimodal` | MLX calibration mode (`multimodal` \| `text`) |
-| `Q_BITS` / `Q_GROUP_SIZE` | `8` / `64` | MLX quantization bit-width / group size |
-| `CALIB_DATASET` / `CALIB_SPLIT` / `CALIB_SAMPLES` / `CALIB_REVISION` | `detection-datasets/coco` / `val` / `64` / pinned commit | Source for `calibration-images/` — see `PROVENANCE.md` §4 |
-| `GGUF_QUANTS` | `Q4_K_M Q8_0` | GGUF quant levels to produce (space-separated list, must be non-empty) |
-| `GGUF_F16_TYPE` | `f16` | Intermediate dtype before quantizing — must be `f32`/`f16`/`bf16`/`auto`; `convert-gguf` rejects anything else (an already-quantized outtype would defeat the two-stage design) |
-| `GGUF_F16_GGUF` | `GGUF_OUT_DIR/model-<type>.gguf` | Path `quantize-gguf` reads back in; override to point at an existing conversion |
-| `CALIB_TEXT_DATASET` / `CALIB_TEXT_SPLIT` / `CALIB_TEXT_SAMPLES` / `CALIB_TEXT_REVISION` | `tatsu-lab/alpaca` / `train` / `100` / pinned commit | Source for `calibration-text.txt` — **`tatsu-lab/alpaca` is CC-BY-NC-4.0, see `PROVENANCE.md` §4** |
-| `LLAMA_CPP_REF` | a pinned commit SHA | `ik_llama.cpp` commit `build-llama-cpp` fetches — not the moving default branch |
-| `GGML_CUDA` | auto-detected (`ON` if `nvidia-smi` is on `PATH`, else `OFF`) | Whether `build-llama-cpp` builds `ik_llama.cpp` with CUDA support; override `GGML_CUDA=ON`/`OFF` to force either way |
-| `CUDA_ARCHITECTURES` | empty (unset) | Optional `-DCMAKE_CUDA_ARCHITECTURES` override, e.g. `"80;86;90"` — left empty by default so ik_llama.cpp's own CMakeLists picks its default target list, which resolves to auto-detected `"native"` on CMake >=3.24 + CUDA toolkit >=11.6, but falls back to a hardcoded list capped at compute capability 80 (missing 89/L4-L40s-RTX40 and 90/H100-H200) on older toolchains — set this explicitly (`89` or `90`) if you're on an older CMake/CUDA and targeting one of those GPUs; see the Track B section above |
-| `LLAMA_NGL` | `999` | GPU layers offloaded to `llama-imatrix` when `GGML_CUDA=ON` (999 = all layers, clamped to the model's actual layer count); ignored when `GGML_CUDA=OFF` |
-| `DEVICE_MAP` / `MAX_MEMORY` | empty (no-op) | Optional passthrough to heretic's `--device-map`/`--max-memory` for advanced multi-GPU tuning; empty by default so heretic's own `device_map="auto"` (Accelerate auto-sharding across all visible GPUs) is used unchanged. Flag names confirmed via `cli_kebab_case=True` in `src/heretic/config.py`'s `CliSettingsSource(...)` call (same mechanism as `--quantization`/`--model-commit`). `DEVICE_MAP` takes a plain string (`auto`, `balanced`, `sequential`, `cuda:0`, ...). `MAX_MEMORY` takes pydantic-settings' comma-separated dict CLI syntax, e.g. `MAX_MEMORY="0=20GiB,1=20GiB,cpu=64GiB"` (device index or `cpu` as key, size string as value — matches Accelerate's own `max_memory` dict convention) |
-| `DEV_MODEL` | `TinyLlama/TinyLlama-1.1B-Chat-v1.0` | Model `make dev-abliterate` runs instead of `MODEL` — see "Dev cycle (cheap iteration)" above |
-| `DEV_BATCH_SIZE` | `32` | Fixed batch size `make dev-abliterate-e2e` passes to heretic's `--batch-size` (0/auto is skipped, since `expect` can't wait through heretic's own batch-size auto-detection benchmark) |
-| `DEV_PREFLIGHT_ARGS` | `--min-vram-gb 8 --min-disk-gb 30` | Extra args forwarded to `scripts/preflight_check.py` by `make dev-doctor`, sized for `DEV_MODEL` instead of the production `MODEL`'s 300GB-VRAM/400GB-disk floors |
-| `PAPER_ARXIV_ID` | `2406.11717` | arXiv id (no version suffix) of the reference paper `make paper` fetches — see `PROVENANCE.md` §8 |
-| `PAPER_ARXIV_VERSION` | `v3` | Exact arXiv version to pin (the revision being reproduced; arXiv has no commit hashes) |
-| `PAPER_TITLE` | the Arditi et al. 2024 title | Paper title recorded in the manifest; override together with the id/version if you retarget it |
-| `PAPER_AUTHORS` | the paper's 7 authors | Comma-separated authors recorded in the manifest |
-| `PAPER_LICENSE` | `arXiv.org perpetual, non-exclusive license to distribute 1.0` | License recorded in the manifest — **non-permissive**; the PDF stays git-ignored |
-| `PAPER_LICENSE_URL` | arXiv's nonexclusive-distrib/1.0 URL | URL of the license text, recorded in the manifest |
-| `PAPER_OUT` | `references/<id><version>.pdf` | Where `make paper` writes the PDF (git-ignored); its `.provenance.json` sidecar goes alongside and **is** tracked |
-| `PAPER_TIMEOUT` | `60` | Network timeout (seconds) for the paper download |
-| `SLIDES_SRC` / `SLIDES_OUT` | `presentation/abliteration.md` / `presentation/dist` | Deck source and render output directory |
-| `CHROME_PATH` | autodetected Playwright Chromium | Browser used for `slides-pdf`. `marp-cli` only autodetects chrome/edge/firefox; set this explicitly if none is installed |
-| `PREFLIGHT_ARGS` | empty | Extra args forwarded to `scripts/preflight_check.py` by `make doctor`, e.g. `PREFLIGHT_ARGS="--require-gpu --min-vram-gb 600"` |
-
-See the `Makefile` itself for the full list and inline rationale comments.
-
-## Orchestration via Metaflow
-
-This pipeline's four stages (decensoring, MLflow result-logging, and the
-two independent compression searches) are also available as one
-orchestrated Metaflow flow (`flow.py` at the repo root, backing
-`specs/002-metaflow-migration/`). The existing `make` targets documented
-above (`dev-abliterate-e2e`, `log-abliteration-mlflow`, `optimize-mlx`,
-`optimize-gguf`, `optimize`) already invoke `flow.py` internally — no
-change to how you use them. `flow.py` is also directly invocable,
-bypassing `make` entirely, which is the required entry point for
-production runs:
-
-```sh
+```bash
 python flow.py run --model TinyLlama/TinyLlama-1.1B-Chat-v1.0 \
     --mlflow_tracking_uri sqlite:///mlflow.db
 ```
 
-Every `flow.py` `Parameter` mirrors an existing Makefile variable, using
-Metaflow's own auto-generated CLI flag convention (underscored, matching
-the Python attribute name exactly — e.g. `--model_commit`, not
-`--model-commit`; confirmed via `python flow.py run --help`). Pass
-`--only_step <name>[,<name>...]` to restrict a run to specific steps
-(`decensor`, `log_to_mlflow`, `mlx_search`, `gguf_search`) — this is what
-each `make` target uses internally.
+**Resume interrupted runs:**
 
-### Resuming an interrupted run
-
-An orchestrated run interrupted partway through (crash, `Ctrl-C`, machine
-restart) resumes via Metaflow's own `resume` command — no separate
-recovery mechanism exists or is needed:
-
-```sh
+```bash
 python flow.py resume
 ```
 
-This continues the most recently interrupted run, skipping every step
-that already completed successfully and retrying only the step that
-failed forward — verified empirically (a killed run's completed step
-produces no new side effect on `resume`; see
-`specs/002-metaflow-migration/research.md` item 3 and
-`specs/002-metaflow-migration/quickstart.md` Scenario 3). This extends
-each stage's existing per-search resumability (Optuna's `study.db`,
-MLflow's idempotent logging) into a whole-pipeline-level guarantee with
-zero new recovery code.
+Skips completed steps, retries only the failed step.
 
-## Notes & caveats
+### Flow Graph
 
-- **Destructive operations are atomic and safe to re-run.** `convert-mlx`,
-  `convert-gguf`, and `quantize-gguf`'s imatrix step all write to a sibling
-  `.tmp` path/directory first and only replace the previous output via a
-  final rename/swap *after* the tool exits successfully — a failed or
-  interrupted run (or a missing `mlx_vlm`/`llama-quantize` binary) never
-  destroys a previously-good artifact. `quantize-gguf` additionally writes
-  every requested quant level to a `.tmp` name, and only clears stale
-  levels from a previous, differently-configured run (and renames the new
-  ones into place) once *every* requested level has succeeded — a mid-loop
-  failure now correctly aborts and reports an error (via `set -e`) instead
-  of silently reporting success with a missing quant. Path variables used
-  in `rm -rf` (`VENV`, `MLX_OUT_DIR`, `LLAMA_CPP_DIR`) are guarded against
-  being empty or `/`/`.` before anything is deleted.
-- **`gguf`'s ordering is explicit, not just prerequisite order.** `quantize-gguf`
-  is invoked from `gguf`'s recipe (`$(MAKE) quantize-gguf`) rather than
-  listed as a second prerequisite, specifically so `make -j gguf` can't run
-  it concurrently with `convert-gguf` — Make has no file-based edge between
-  two phony targets, so two prerequisites of one target are fair game for
-  parallel execution under `-j` even though `quantize-gguf`'s runtime
-  existence-check for the F16 file assumes `convert-gguf` already finished.
-- **`abliterate`'s `SEED` improves but doesn't guarantee bit-exact reproducibility.**
-  It's passed straight to Heretic's `--seed`, which seeds Python's `random`,
-  NumPy, PyTorch, and Optuna — removing the dominant source of run-to-run
-  variance (Optuna's search order) — but floating-point reduction order on
-  GPU/Metal kernels isn't something a seed controls. `MODEL_COMMIT` still
-  defaults to unpinned (see above); heretic's 4 internal prompt datasets are
-  pinned by default. Treat re-runs as "very likely the same, not
-  byte-for-byte guaranteed."
-- **`GGUF_F16_TYPE` is intentionally restricted.** `convert_hf_to_gguf.py`
-  accepts quantized `--outtype` choices too (`q8_0`, `q4_0`, ...), but
-  `quantize-gguf` expects to run `llama-quantize` against a *full-resolution*
-  source — quantizing an already-quantized file defeats the point of the
-  two-stage design, so `convert-gguf` explicitly rejects anything other than
-  `f32`/`f16`/`bf16`/`auto`.
-- **GGUF toolchain choice**: uses the `ik_llama.cpp` fork rather than mainline `ggml-org/llama.cpp`.
-  Mainline has open bugs in the hybrid linear-attention tensor conversion that
-  `Qwen3.6-35B-A3B`'s architecture uses; `ik_llama.cpp` has dedicated, verified
-  support for this model family. Trade-off is platform-dependent: on **macOS**,
-  `ik_llama.cpp` still does not prioritize Metal, so `llama-imatrix` runs on
-  CPU/ARM_NEON there (well-supported, just slower than GPU offload). On
-  **Linux with an NVIDIA GPU**, the Makefile now auto-detects `nvidia-smi`
-  and builds with `-DGGML_CUDA=ON`, so `llama-imatrix` runs with GPU offload
-  (`-ngl $(LLAMA_NGL)`, default all layers) instead. Either way,
-  `llama-quantize` itself remains CPU-bound on every platform regardless of
-  `GGML_CUDA` — quantization/repacking isn't GPU-accelerated in
-  llama.cpp/ik_llama.cpp. `build-llama-cpp` fetches a **pinned commit**
-  (`LLAMA_CPP_REF`), not the moving default branch, so a from-scratch clone
-  always reproduces the same tested toolchain instead of whatever happens to
-  be tip-of-branch on a given day.
-- **AWQ calibration cost**: `mlx_vlm.convert`'s AWQ path forwards every file in
-  `calibration-images/` through the full model, unbatched, with no cap — keep
-  `CALIB_SAMPLES` small (tens, not thousands). AWQ only needs a small, diverse
-  sample to estimate per-channel activation scale. `convert-mlx` only passes
-  `--calibration-data` when that directory actually contains at least one
-  file (not merely when the path exists — an empty directory is treated the
-  same as a missing one).
-- Both `scripts/fetch_calibration_*.py` scripts reject `--samples <= 0`,
-  URL-encode their datasets-server query parameters, apply an explicit
-  network timeout to every request (including per-image downloads), and
-  write their output atomically (temp path, then rename/swap) — a stalled
-  download or a mid-run failure leaves the previous calibration set intact
-  rather than a partially-overwritten one.
-- **`--export-strategy MERGE` is hardcoded** in `abliterate`, not exposed as a
-  Makefile variable — edit the recipe directly if you want the `ADAPTER`
-  strategy instead.
-- **Known limitation — dependency/data pinning, current state.** `ik_llama.cpp`,
-  heretic's 4 internal prompt datasets, and this project's 2 calibration
-  datasets are all pinned to exact commits by default (see `PROVENANCE.md`).
-  `MODEL_COMMIT` is deliberately left unpinned by default (§2 of
-  `PROVENANCE.md` explains why) — pin it explicitly per run if you need it.
-  `requirements.txt` still uses version ranges (for compatible-fix pickup);
-  run `make lock` to capture the exact versions actually installed into
-  `requirements-lock.txt` for a given run. GPU/Metal floating-point
-  execution order remains outside anything this pipeline controls.
-- **Known limitation — `.gitignore` covers the default paths, not overrides.**
-  If you override `CALIBRATION_DATA`, `CALIB_TEXT_FILE`, `LLAMA_CPP_DIR`, or
-  point `MLX_OUT_DIR`/`GGUF_OUT_DIR` somewhere outside `outputs/`, that
-  custom path isn't automatically git-ignored — check `git status` before
-  committing if you've overridden any of these.
-- Model, calibration, and GGUF artifacts are all git-ignored by default
-  (`outputs/`, `calibration-images/` (+ its `.tmp` sibling), `calibration-text.txt`
-  (+ its `.tmp` sibling), `ik_llama.cpp/`, `*.gguf`, etc.) — nothing here is
-  meant to be committed.
-- **`vendor/heretic` is a vendored reference copy, not the runtime — and
-  populating it never blocks a build, even against an unreachable
-  network.** It's a git submodule pinned to the same `heretic-llm`
-  version this pipeline installs from PyPI (see `PROVENANCE.md` §5) —
-  kept for local reference and tooling that cross-references heretic's
-  own source (e.g. codegraph indexing), not because the pipeline runs
-  code from it. `make abliterate` runs `$(VENV)/bin/heretic`, the
-  pip-installed console script, regardless of whether `vendor/heretic`
-  is checked out. `make setup`'s `vendor-heretic` step is deliberately
-  best-effort: no `.git` present (a release tarball) or an already
-  git-submodule-unaware checkout produce a `WARNING` immediately; a
-  firewalled/unroutable remote is bounded to `VENDOR_HERETIC_TIMEOUT`
-  seconds (default `20`, override with e.g.
-  `make setup VENDOR_HERETIC_TIMEOUT=5`) rather than hanging forever —
-  `git`'s own `http.lowSpeedLimit`/`lowSpeedTime` only bound a *stalled
-  transfer*, not the initial connection attempt to an unroutable host,
-  so this is enforced by the Makefile itself, empirically confirmed
-  against an unroutable address in development. Either way, `install`/
-  `test`/every export target has no dependency on this directory.
-  Populate it manually any time with
-  `git submodule update --init vendor/heretic`.
+<p align="center">
+  <img src="docs/assets/metaflow.svg" alt="Metaflow flow: start → decensor → log_to_mlflow → parallel fan-out (mlx_search + gguf_search) → join → end" width="100%">
+</p>
+
+| `make` target | `--only_step` | What runs |
+|---------------|---------------|-----------|
+| `dev-abliterate-e2e` | `decensor,log_to_mlflow` | Abliteration + logging |
+| `optimize-mlx` | `mlx_search` | MLX quant search |
+| `optimize-gguf` | `gguf_search` | GGUF quant search |
+
+<br>
+
+<p align="center"><img src="docs/assets/divider.svg" alt="" width="100%"></p>
+
+## 🛠️ Make Targets
+
+| Target | Description |
+|--------|-------------|
+| `make setup` | Create venv, install deps, best-effort populate `vendor/heretic` |
+| `make doctor` / `make dev-doctor` | Check hardware requirements (production / dev floors) |
+| `make abliterate` | Run Heretic against `MODEL` |
+| `make dev-abliterate` | Same, against `DEV_MODEL` (TinyLlama) |
+| `make dev-abliterate-e2e` | Non-interactive dev abliteration via `expect` |
+| `make calibration-data` | Fetch COCO images for MLX AWQ |
+| `make convert-mlx` | HF → MLX format (AWQ-quantized) |
+| `make generate-mlx` | Smoke test MLX output |
+| `make build-llama-cpp` | Fetch + build `ik_llama.cpp` (pinned commit) |
+| `make convert-gguf` | HF → full-resolution GGUF (F16) |
+| `make calibration-text` | Fetch Alpaca rows for imatrix |
+| `make quantize-gguf` | imatrix + quantize to `GGUF_QUANTS` |
+| `make gguf` | `convert-gguf` then `quantize-gguf` (ordered) |
+| `make optimize-mlx` / `make optimize-gguf` | Optuna multi-objective quant search |
+| `make optimize` | Both searches (sequential or parallel per `OPTIMIZE_PARALLEL`) |
+| `make log-abliteration-mlflow` | Log Heretic trials to MLflow (idempotent) |
+| `make lock` | Freeze versions → `requirements-lock.txt` |
+| `make notices` | Regenerate license manifest → `third_party_licenses.json` |
+| `make test` | Run pytest suite |
+| `make slides` / `make slides-pdf` | Render presentation deck (HTML / PDF) |
+| `make paper` | Fetch pinned reference paper (Arditi et al. 2024) |
+| `make clean` | Remove `.venv` |
+
+Run `make help` for the full list with current variable values.
+
+<br>
+
+<p align="center"><img src="docs/assets/divider.svg" alt="" width="100%"></p>
+
+## 🎛️ Key Variables
+
+Override on command line: `make convert-mlx Q_BITS=4`
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `MODEL` | `Qwen/Qwen3.6-35B-A3B` | HF model to abliterate |
+| `MODEL_COMMIT` | unpinned | Exact Hub commit (pin for reproducibility) |
+| `QUANTIZATION` | `NONE` | `NONE` or `BNB_4BIT` |
+| `SEED` | `42` | Heretic optimizer seed |
+| `MLFLOW_TRACKING_URI` | *(required)* | MLflow server URI — must be set before logging/optimization |
+| `MLFLOW_EXPERIMENT_PREFIX` | `wellspring` | Prefix for MLflow experiment names |
+| `HF_PATH` | `OUT_DIR` | Shared input to both export paths |
+| `SKIP_DECENSOR` | `0` | `1` = export/search `HF_PATH` without abliteration; requires an explicit local `HF_PATH`, tags manifests `decensored=false` |
+| `QUANT_METHOD` | `awq` | MLX method: `awq` or `rtn` |
+| `Q_BITS` / `Q_GROUP_SIZE` | `8` / `64` | MLX quantization bit-width / group size |
+| `GGUF_QUANTS` | `Q4_K_M Q8_0` | GGUF quant levels (space-separated) |
+| `GGUF_F16_TYPE` | `f16` | Intermediate dtype — `f32`/`f16`/`bf16`/`auto` only |
+| `LLAMA_CPP_REF` | pinned commit SHA | `ik_llama.cpp` commit to fetch |
+| `GGML_CUDA` | auto-detected | `ON` if `nvidia-smi` found, else `OFF` |
+| `DEVICE_MAP` / `MAX_MEMORY` | empty | Passthrough to heretic for multi-GPU tuning |
+| `DEV_MODEL` | `TinyLlama/TinyLlama-1.1B-Chat-v1.0` | Dev iteration model |
+| `N_TRIALS_MLX` / `N_TRIALS_GGUF` | `15` / `15` | Optuna trial budget per search |
+| `OPTIMIZE_PARALLEL` | `0` | `0` = sequential, `1` = concurrent (needs separate compute) |
+
+See the Makefile for the full list.
+
+<br>
+
+<p align="center"><img src="docs/assets/divider.svg" alt="" width="100%"></p>
+
+## 📋 Notes & Caveats
+
+- **Atomic operations** — All destructive ops write to `.tmp` first, rename on success. Path variables in `rm -rf` are guarded against empty/`/`/`.`.
+- **GGUF toolchain** — Uses `ik_llama.cpp` fork (not mainline `ggml-org/llama.cpp`). Mainline has bugs in hybrid linear-attention tensor conversion for Qwen3.6. Trade-off: on macOS, `llama-imatrix` runs CPU/ARM_NEON (no Metal priority); on Linux+NVIDIA, auto-detects and builds with CUDA.
+- **AWQ calibration cost** — Keep `CALIB_SAMPLES` small (tens, not thousands). AWQ only needs a small diverse sample.
+- **Reproducibility** — `SEED` seeds Python/NumPy/PyTorch/Optuna but GPU float reduction order isn't deterministic. Treat re-runs as "very likely the same, not byte-for-byte guaranteed."
+- **`GGUF_F16_TYPE` is restricted** — `convert-gguf` rejects quantized outtypes; the two-stage design requires a full-resolution source.
+- **`--export-strategy MERGE` is hardcoded** — edit the Makefile recipe directly for `ADAPTER`.
+- **`vendor/heretic` is optional** — a reference copy for local tooling, not the runtime. The pipeline runs `heretic-llm` from PyPI.
+- **`.gitignore` covers defaults only** — overriding output paths may require manual `.gitignore` entries.
+- **License flags** — `heretic-llm` is **AGPL-3.0-or-later** (subprocess), `tatsu-lab/alpaca` is **CC-BY-NC-4.0**. See `THIRD_PARTY_NOTICES.md`.
+
+<br>
+
+<p align="center"><img src="docs/assets/divider.svg" alt="" width="100%"></p>
+
+## 📚 Additional Resources
+
+| Resource | Description |
+|----------|-------------|
+| [**presentation/**](presentation/abliteration.md) | Conference talk: 45 slides, 16 animated SVG diagrams. Build: `make slides` |
+| [**presentation/DESIGN.md**](presentation/DESIGN.md) | Slide deck design system and diagram splice procedure |
+| [**docs/DESIGN.md**](docs/DESIGN.md) | Documentation design system — colors, SVGs, section conventions |
+| [**vault/**](vault/wellspring.md) | Obsidian knowledge base: decisions, discoveries, session logs |
+| [**CONTRIBUTING.md**](CONTRIBUTING.md) | How to contribute — dev setup, PR process, code standards |
+| [**AGENTS.md**](AGENTS.md) | Operating guide for AI coding agents |
+| [**.specify/memory/constitution.md**](.specify/memory/constitution.md) | Project governance principles |
+
+<br>
+
+<p align="center"><img src="docs/assets/divider.svg" alt="" width="100%"></p>
+
+<p align="center">
+  <sub>Built with <a href="https://github.com/p-e-w/heretic">Heretic</a> · <a href="https://github.com/ikawrakow/ik_llama.cpp">ik_llama.cpp</a> · <a href="https://github.com/Blaizzy/mlx-vlm">mlx-vlm</a> · Contributions welcome!</sub>
+</p>
