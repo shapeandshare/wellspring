@@ -334,6 +334,84 @@ make generate-mlx
 
 (GGUF has no `make` runtime target yet — load `GGUF_OUT_DIR/model-Q4_K_M.gguf` etc. directly in `llama.cpp`, Ollama, or LM Studio.)
 
+## MLflow: experiment tracking, auditability, and cross-run review
+
+`make log-abliteration-mlflow`, `make optimize-mlx`, and `make optimize-gguf`
+each record one MLflow run per trial — this is how you get auditability and
+review across runs, not just within one invocation. **Set this up before
+your first optimization/logging run**, not after, since `MLFLOW_TRACKING_URI`
+has no default and every one of these targets fails fast (exit 1) if it's
+unset.
+
+### Choose local (offline) or hosted — both are first-class, nothing else changes
+
+```sh
+# Local, offline, single-machine — a SQLite file, no server process to run
+export MLFLOW_TRACKING_URI=sqlite:///mlflow.db
+
+# Hosted — a real tracking server, e.g. shared by a team or CI
+export MLFLOW_TRACKING_URI=http://localhost:5000   # or any reachable server URL
+```
+
+Set this once per shell session (or in CI config) before running any of the
+three targets above; every one of them reads it from the environment and
+never accepts it as a Makefile variable with a default, so a forgotten
+export fails immediately with a clear message rather than silently writing
+to (or skipping) the wrong store. **Use a hosted server, not a local
+SQLite file, if more than one person/machine needs to review the same
+trials** — a local `sqlite:///mlflow.db` is only visible on the machine that
+wrote it.
+
+Credentials (`MLFLOW_TRACKING_USERNAME` / `MLFLOW_TRACKING_PASSWORD` /
+`MLFLOW_TRACKING_TOKEN`) are read directly by the `mlflow` Python library
+from the environment — never pass them as a Makefile variable or CLI flag,
+and none of this pipeline's scripts accept them (FR-014).
+
+### What's recorded, and where
+
+| Experiment (under `MLFLOW_EXPERIMENT_PREFIX`, default `wellspring`) | Populated by | Per-trial params | Per-trial metrics |
+|---|---|---|---|
+| `<prefix>-abliteration` | `make log-abliteration-mlflow` (reads Heretic's own Optuna journal) | Heretic's Optuna `trial.params` | `kl_divergence_value`, `refusals_value`, `refusals_baseline_value`, `n_bad_prompts` |
+| `<prefix>-mlx-quant` | `make optimize-mlx` | MLX quant search params | perplexity, refusal-rate |
+| `<prefix>-gguf-quant` | `make optimize-gguf` | `GGUF_QUANT`, `calib_text_samples` | `perplexity`, `refusal_rate` |
+
+Every run is also tagged with `trial_number`; abliteration runs additionally
+carry `journal_identity` (a hash of the journal file's path) so a run can be
+traced back to the exact journal it came from.
+
+### Re-running logging is safe — idempotent by design
+
+`make log-abliteration-mlflow` checks MLflow itself
+(`mlflow.search_runs(filter_string="tags.journal_identity = ... and
+tags.trial_number = ...")`) before creating a run, and skips any
+(journal, trial) pair already logged. Re-run it as often as you like —
+after a crash, on a schedule, or just to pick up newly-completed trials —
+it never produces duplicate rows (FR-002).
+
+### Reviewing and comparing across runs
+
+Point the MLflow UI at the same `MLFLOW_TRACKING_URI` you used for logging:
+
+```sh
+mlflow ui --backend-store-uri "$MLFLOW_TRACKING_URI"
+```
+
+Because the store is persistent across invocations, this shows every trial
+ever logged to that experiment — not just the most recent run — so you can
+compare params vs. metrics across the full history (e.g. every `GGUF_QUANT`
+choice ever tried vs. its `perplexity`/`refusal_rate` tradeoff). The same
+`mlflow.search_runs()` API used for idempotency is also the tool for
+scripted cross-run audits, e.g. every abliteration trial above a KL-divergence
+threshold, or every GGUF trial below a target refusal rate.
+
+**MLflow metrics alone don't prove which exact artifact produced a score** —
+for that, cross-reference the sidecar `<name>.provenance.json` (records
+`wellspring_commit`, `wellspring_dirty`, and pinned tool commits like
+`ik_llama.cpp`'s) and the `manifest.json` in each search's
+`*-optimize-archive/` directory, which links trial number → archived file →
+metrics → timestamp. See [`PROVENANCE.md`](PROVENANCE.md) for the full
+chain-of-custody model.
+
 ## Pipeline
 
 ```mermaid
