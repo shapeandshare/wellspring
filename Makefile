@@ -179,6 +179,14 @@ DEV_BATCH_SIZE ?= 32
 
 # --- MLX conversion (make convert-mlx HF_PATH=...) --------------------------
 HF_PATH      ?= $(OUT_DIR)
+# SKIP_DECENSOR=1 exports/searches an un-abliterated model as-is. HF_PATH must
+# then point at a local model directory (the default is Heretic's output),
+# and every export manifest is tagged decensored=false.
+SKIP_DECENSOR ?= 0
+SKIP_DECENSOR_GUARD = [ "$(SKIP_DECENSOR)" != 1 ] || [ "$(HF_PATH)" != "$(OUT_DIR)" ] || \
+	{ echo "ERROR: SKIP_DECENSOR=1 requires HF_PATH=<local model dir> (default $(OUT_DIR) is Heretic's output)" >&2; exit 1; }
+SKIP_DECENSOR_FIELD = $(if $(filter 1,$(SKIP_DECENSOR)),--field decensored=false,)
+SKIP_DECENSOR_FLAG = $(if $(filter 1,$(SKIP_DECENSOR)),--skip_decensor True,)
 MLX_OUT_DIR  ?= $(HF_PATH)-mlx
 Q_BITS       ?= 8
 Q_GROUP_SIZE ?= 64
@@ -325,6 +333,8 @@ help:
 	@echo "                                       into $(CALIBRATION_DATA)/"
 	@echo "  make convert-mlx [HF_PATH=dir]      Convert a heretic export to MLX format"
 	@echo "                                       (default HF_PATH: $(OUT_DIR))"
+	@echo "                                       SKIP_DECENSOR=1 HF_PATH=<local model dir> exports an"
+	@echo "                                       un-abliterated model (also convert-gguf/optimize*)"
 	@echo "                                       Quantizes with $(QUANT_METHOD)/$(CALIBRATION) calibration by default;"
 	@echo "                                       auto-uses $(CALIBRATION_DATA)/ if it's a non-empty directory"
 	@echo "                                       (see calibration-data), else falls back to mlx-vlm's"
@@ -555,6 +565,7 @@ convert-mlx: install
 		echo "        Use the GGUF export path instead: make convert-gguf && make quantize-gguf" >&2; \
 		exit 1; \
 	fi
+	@$(SKIP_DECENSOR_GUARD)
 	@test -n "$(MLX_OUT_DIR)" && [ "$(MLX_OUT_DIR)" != "/" ] && [ "$(MLX_OUT_DIR)" != "." ] || \
 		{ echo "ERROR: MLX_OUT_DIR is unsafe: '$(MLX_OUT_DIR)'" >&2; exit 1; }
 	@echo "==> Converting $(HF_PATH) -> $(MLX_OUT_DIR) ($(Q_BITS)-bit, group size $(Q_GROUP_SIZE), $(QUANT_METHOD) quantization, calibration=$(CALIBRATION))"
@@ -571,7 +582,7 @@ convert-mlx: install
 		--out "$(MLX_OUT_DIR).provenance.json" \
 		--field hf_path=$(HF_PATH) --field q_bits=$(Q_BITS) --field q_group_size=$(Q_GROUP_SIZE) \
 		--field quant_method=$(QUANT_METHOD) --field calibration=$(CALIBRATION) \
-		--field calibration_data_dir=$(CALIBRATION_DATA)
+		--field calibration_data_dir=$(CALIBRATION_DATA) $(SKIP_DECENSOR_FIELD)
 	@echo "==> MLX model written to $(MLX_OUT_DIR)/ (previous version, if any, only replaced now that conversion succeeded)"
 
 optimize-mlx: install
@@ -580,7 +591,9 @@ optimize-mlx: install
 		echo "        Use make optimize-gguf instead for the GGUF search path." >&2; \
 		exit 1; \
 	fi
+	@$(SKIP_DECENSOR_GUARD)
 	"$(PYTHON)" flow.py run --only_step mlx_search \
+		$(SKIP_DECENSOR_FLAG) \
 		--hf_path "$(HF_PATH)" \
 		--n_trials_mlx "$(N_TRIALS_MLX)" \
 		--mlflow_tracking_uri "$(MLFLOW_TRACKING_URI)" \
@@ -596,7 +609,9 @@ optimize-mlx: install
 # Disk footprint: N_TRIALS_GGUF × one quantized GGUF file per chosen quant
 # level (see README.md "Key variables" for the N_TRIALS_GGUF row).
 optimize-gguf: install
+	@$(SKIP_DECENSOR_GUARD)
 	"$(PYTHON)" flow.py run --only_step gguf_search \
+		$(SKIP_DECENSOR_FLAG) \
 		--hf_path "$(HF_PATH)" \
 		--n_trials_gguf "$(N_TRIALS_GGUF)" \
 		--llama_perplexity_bin "$(LLAMA_PERPLEXITY)" \
@@ -661,6 +676,7 @@ convert-gguf: install build-llama-cpp
 		*" $(GGUF_F16_TYPE) "*) ;; \
 		*) echo "ERROR: GGUF_F16_TYPE must be one of f32/f16/bf16/auto (non-quantized); got '$(GGUF_F16_TYPE)'" >&2; exit 1;; \
 	esac
+	@$(SKIP_DECENSOR_GUARD)
 	@mkdir -p "$(GGUF_OUT_DIR)"
 	@echo "==> Converting $(HF_PATH) -> $(GGUF_F16_GGUF) (full resolution, no quantization)"
 	@rm -f "$(GGUF_F16_GGUF).tmp"
@@ -669,7 +685,7 @@ convert-gguf: install build-llama-cpp
 	@mv -f "$(GGUF_F16_GGUF).tmp" "$(GGUF_F16_GGUF)"
 	@"$(PYTHON)" scripts/write_manifest.py --step convert-gguf --freeze \
 		--out "$(GGUF_F16_GGUF).provenance.json" \
-		--field hf_path=$(HF_PATH) --field gguf_f16_type=$(GGUF_F16_TYPE) \
+		--field hf_path=$(HF_PATH) --field gguf_f16_type=$(GGUF_F16_TYPE) $(SKIP_DECENSOR_FIELD) \
 		--git-dir "ik_llama.cpp=$(LLAMA_CPP_DIR)"
 	@echo "==> Full-resolution GGUF written to $(GGUF_F16_GGUF) (previous version, if any, only replaced now that conversion succeeded)"
 	@echo "==> Run 'make quantize-gguf' to produce quantized levels ($(GGUF_QUANTS))"
@@ -734,7 +750,9 @@ endif
 
 optimize: install
 	@echo "==> OPTIMIZE_PARALLEL=$(OPTIMIZE_PARALLEL): --max-workers $(OPTIMIZE_MAX_WORKERS)"
+	@$(SKIP_DECENSOR_GUARD)
 	"$(PYTHON)" flow.py run --only_step mlx_search,gguf_search \
+		$(SKIP_DECENSOR_FLAG) \
 		--max-workers $(OPTIMIZE_MAX_WORKERS) \
 		--hf_path "$(HF_PATH)" \
 		--n_trials_mlx "$(N_TRIALS_MLX)" \

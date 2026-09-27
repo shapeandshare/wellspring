@@ -121,6 +121,11 @@ class WellspringFlow(FlowSpec):
     n_trials_gguf = Parameter("n_trials_gguf", default=15)
     study_checkpoint_dir = Parameter("study_checkpoint_dir", default="checkpoints")
     only_step = Parameter("only_step", default="")
+    # Quantize a model as-is, without Heretic abliteration: skips decensor
+    # and log_to_mlflow, requires an explicit --hf_path (a local model
+    # directory -- convert_hf_to_gguf.py cannot read a Hub ID), and records
+    # decensored=false in every export manifest this run writes.
+    skip_decensor = Parameter("skip_decensor", default=False, type=bool)
 
     # Heretic's own internal abliteration-methodology datasets (good/bad
     # prompts) — pinned defaults matching the Makefile's own
@@ -179,8 +184,19 @@ class WellspringFlow(FlowSpec):
         return {name.strip() for name in raw.split(",") if name.strip()}
 
     def _should_skip(self, step_name: str) -> bool:
+        if self.skip_decensor and step_name in ("decensor", "log_to_mlflow"):
+            return True
         requested = self._requested_steps()
         return bool(requested) and step_name not in requested
+
+    def _export_manifest_fields(self) -> dict[str, str]:
+        """Provenance fields for export manifests; marks a skip_decensor run
+        explicitly so an un-abliterated artifact is never mistaken for one.
+        """
+        fields = _run_provenance_fields()
+        if self.skip_decensor:
+            fields["decensored"] = "false"
+        return fields
 
     @step
     def start(self):
@@ -193,6 +209,12 @@ class WellspringFlow(FlowSpec):
             os.environ["MLFLOW_TRACKING_URI"] = self.mlflow_tracking_uri
         require_tracking_uri()
 
+        if self.skip_decensor and not self.hf_path:
+            raise ValueError(
+                "skip_decensor requires --hf_path pointing at a local model "
+                "directory (the default path is Heretic's output, which a "
+                "skipped decensor step never produces)."
+            )
         self.resolved_hf_path = self.hf_path or _derive_hf_path(self.model)
         self.next(self.decensor)
 
@@ -388,7 +410,7 @@ class WellspringFlow(FlowSpec):
             text_path="calibration-text.txt",
             tracking_uri=tracking_uri,
             experiment_prefix=self.mlflow_experiment_prefix,
-            extra_manifest_fields=_run_provenance_fields(),
+            extra_manifest_fields=self._export_manifest_fields(),
         )
         self.next(self.join_searches)
 
@@ -405,7 +427,7 @@ class WellspringFlow(FlowSpec):
         import optimize_gguf
 
         gguf_out_dir = _derive_gguf_out_dir(self.resolved_hf_path)
-        provenance_fields = _run_provenance_fields()
+        provenance_fields = self._export_manifest_fields()
         argv = [
             "optimize_gguf.py",
             "--n-trials", str(self.n_trials_gguf),
