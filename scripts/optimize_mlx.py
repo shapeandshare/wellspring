@@ -63,6 +63,7 @@ import optuna
 from _mlflow_env import require_tracking_uri
 from eval_perplexity_mlx import compute_perplexity
 from eval_refusal_rate import compute_refusal_rate
+from write_manifest import git_commit as _git_commit, git_dirty as _git_dirty
 
 # Suppress Optuna's per-trial log spam in batch / CI contexts.
 optuna.logging.set_verbosity(optuna.logging.WARNING)
@@ -124,22 +125,22 @@ def _is_ancestor_or_descendant(path_a: Path, path_b: Path) -> bool:
 # ---------------------------------------------------------------------------
 
 def _append_manifest(manifest_path: Path, entry: dict) -> None:
-    """Append one trial entry to the JSON-list manifest at manifest_path.
-
-    Reads the existing list (or starts with []), appends entry, then writes to
-    a ``.tmp`` sibling and renames — matching the atomic-write pattern used
-    throughout this project (write_manifest.py, fetch_calibration_*.py) per
-    Constitution Article IV Rule 1.
-
-    Args:
-        manifest_path: Path to the ``manifest.json`` file inside archive_root.
-        entry: Dict with at least ``trial_number``, ``archive_path``, ``params``.
-    """
     if manifest_path.exists():
         entries: list = json.loads(manifest_path.read_text(encoding="utf-8"))
     else:
         entries = []
     entries.append(entry)
+    tmp = Path(str(manifest_path) + ".tmp")
+    tmp.write_text(json.dumps(entries, indent=2) + "\n", encoding="utf-8")
+    tmp.replace(manifest_path)
+
+
+def _update_manifest_entry(manifest_path: Path, trial_number: int, updates: dict) -> None:
+    entries: list = json.loads(manifest_path.read_text(encoding="utf-8"))
+    for entry in entries:
+        if entry.get("trial_number") == trial_number:
+            entry.update(updates)
+            break
     tmp = Path(str(manifest_path) + ".tmp")
     tmp.write_text(json.dumps(entries, indent=2) + "\n", encoding="utf-8")
     tmp.replace(manifest_path)
@@ -206,35 +207,10 @@ def run_study(
     tracking_uri: str,
     experiment_prefix: str = "wellspring",
     n_refusal_prompts: int = 10,
+    calibration: str = "multimodal",
     extra_manifest_fields: dict[str, str] | None = None,
     _archive_root_override: str | None = None,
 ) -> None:
-    """Run (or resume) the optimize-mlx Optuna study.
-
-    Args:
-        n_trials: Number of trials to run in this invocation.
-        hf_path: Path to the Heretic-exported HF checkpoint (``HF_PATH`` for
-            ``make convert-mlx``).
-        mlx_out_dir: ``MLX_OUT_DIR`` passed to ``make convert-mlx``.
-            ``archive_root`` is derived exclusively from this value — never
-            from ``hf_path``.
-        text_path: Path to plain-text calibration corpus for perplexity scoring.
-        tracking_uri: MLflow tracking URI.
-        experiment_prefix: Prefix for the MLflow experiment name.  Runs land
-            under ``f"{experiment_prefix}-mlx-quant"``.
-        n_refusal_prompts: Number of harmful prompts for refusal-rate scoring.
-        extra_manifest_fields: Optional fields merged into every trial's
-            manifest.json entry (specs/002-metaflow-migration FR-008/SC-004
-            — e.g. {"run_id": ..., "flow_name": ...} from an orchestrating
-            Metaflow run). None (default) preserves existing behavior exactly.
-        _archive_root_override: Testing-only parameter.  Overrides the default
-            archive_root derivation formula so tests can trigger the
-            ancestor/descendant guard without needing a real colliding path.
-            Never set this in production; the Makefile never passes it.
-    """
-    # Derive archive_root from MLX_OUT_DIR — NEVER from hf_path (data-model.md
-    # Compression-search Fields table rationale: HF_PATH-derivation is not
-    # guaranteed distinct if MLX_OUT_DIR is independently overridden).
     if _archive_root_override is not None:
         archive_root = Path(_archive_root_override).resolve()
     else:
@@ -242,7 +218,6 @@ def run_study(
 
     mlx_out = Path(mlx_out_dir).resolve()
 
-    # Startup guard: reject if archive_root would overlap with mlx_out_dir.
     if _is_ancestor_or_descendant(mlx_out, archive_root):
         print(
             f"ERROR: archive_root {str(archive_root)!r} resolves to an ancestor or "
@@ -257,7 +232,6 @@ def run_study(
     manifest_path = archive_root / "manifest.json"
     storage_url = f"sqlite:///{archive_root}/study.db"
 
-    # MLflow setup — fail fast before expensive work (FR-008-adjacent).
     mlflow.set_tracking_uri(tracking_uri)
     experiment_name = f"{experiment_prefix}-mlx-quant"
     mlflow.set_experiment(experiment_name)
@@ -266,11 +240,6 @@ def run_study(
         f"mlflow.set_experiment({experiment_name!r}) did not create the experiment"
     )
 
-    # Multi-objective Optuna study, both directions "minimize". CAUTION:
-    # compute_refusal_rate() returns the fraction of prompts REFUSED (higher
-    # = more censored) -- minimize it directly, do NOT invert to "1 - rate"
-    # (that would tell the search to maximize refusals, backwards from the
-    # decensoring goal). Never scalarized into one combined metric (FR-007).
     study = optuna.create_study(
         study_name=STUDY_NAME,
         storage=storage_url,
@@ -280,51 +249,48 @@ def run_study(
     )
 
     def objective(trial: optuna.Trial) -> tuple[float, float]:
-        # ---- Suggest hyperparameters ----
         q_bits: int = trial.suggest_categorical("Q_BITS", [4, 8])
         q_group_size: int = trial.suggest_categorical("Q_GROUP_SIZE", [32, 64, 128])
         quant_method: str = trial.suggest_categorical("QUANT_METHOD", ["awq", "rtn"])
 
-        # CALIB_SAMPLES is only meaningful for AWQ; RTN does not perform a
-        # calibration pass (the Makefile's convert-mlx recipe only forwards
-        # --calibration-data when QUANT_METHOD=awq and the calibration dir
-        # contains at least one file).
         calib_samples: int | None = None
         if quant_method == "awq":
             calib_samples = trial.suggest_int("CALIB_SAMPLES", 16, 64)
-
-        # ---- Invoke make convert-mlx ----
-        cmd = [
-            "make", "convert-mlx",
-            f"HF_PATH={hf_path}",
-            f"MLX_OUT_DIR={mlx_out_dir}",
-            f"Q_BITS={q_bits}",
-            f"Q_GROUP_SIZE={q_group_size}",
-            f"QUANT_METHOD={quant_method}",
-        ]
-        if calib_samples is not None:
-            cmd.append(f"CALIB_SAMPLES={calib_samples}")
+            calib_result = subprocess.run(
+                ["make", "calibration-data", f"CALIB_SAMPLES={calib_samples}"],
+                cwd=str(REPO_ROOT),
+                capture_output=True,
+                text=True,
+            )
+            if calib_result.returncode != 0:
+                raise RuntimeError(
+                    f"make calibration-data returned {calib_result.returncode} "
+                    f"for trial {trial.number}.\nstderr: {calib_result.stderr}"
+                )
 
         result = subprocess.run(
-            cmd,
+            [
+                "make", "convert-mlx",
+                f"HF_PATH={hf_path}",
+                f"MLX_OUT_DIR={mlx_out_dir}",
+                f"Q_BITS={q_bits}",
+                f"Q_GROUP_SIZE={q_group_size}",
+                f"QUANT_METHOD={quant_method}",
+                f"CALIBRATION={calibration}",
+            ],
             cwd=str(REPO_ROOT),
             capture_output=True,
             text=True,
         )
         if result.returncode != 0:
-            # Raising here causes Optuna's catch= to mark this trial FAIL.
-            # The trial still counts toward n_trials (FR-016).
             raise RuntimeError(
                 f"make convert-mlx returned {result.returncode} "
                 f"for trial {trial.number}.\nstderr: {result.stderr}"
             )
 
-        # ---- Archive immediately (FR-009) ----
-        # Copy before the NEXT trial's make convert-mlx runs rm -rf MLX_OUT_DIR.
         archived_path = archive_root / f"trial-{trial.number}"
         shutil.copytree(mlx_out_dir, str(archived_path))
 
-        # ---- Append to manifest.json (atomically) ----
         _append_manifest(
             manifest_path,
             {
@@ -336,18 +302,26 @@ def run_study(
                     "QUANT_METHOD": quant_method,
                     **({"CALIB_SAMPLES": calib_samples} if calib_samples is not None else {}),
                 },
+                "wellspring_commit": _git_commit(str(REPO_ROOT)),
+                "wellspring_dirty": _git_dirty(str(REPO_ROOT)),
+                "perplexity": None,
+                "refusal_rate": None,
                 **(extra_manifest_fields or {}),
             },
         )
 
-        # ---- Score the archived checkpoint ----
         perplexity: float = compute_perplexity(str(archived_path), text_path)
         generate_fn = _make_generate_fn(str(archived_path))
         refusal_rate: float = compute_refusal_rate(
             generate_fn, n_prompts=n_refusal_prompts
         )
 
-        # ---- Log to MLflow (perplexity and refusal_rate are independent — FR-007) ----
+        _update_manifest_entry(
+            manifest_path,
+            trial.number,
+            {"perplexity": perplexity, "refusal_rate": refusal_rate},
+        )
+
         with mlflow.start_run(experiment_id=experiment.experiment_id):
             mlflow.log_params(
                 {
@@ -425,15 +399,18 @@ def main() -> None:
         default=10,
         help="Number of harmful prompts for refusal-rate scoring per trial (default: 10).",
     )
+    parser.add_argument(
+        "--calibration",
+        default="multimodal",
+        choices=["multimodal", "text"],
+        help="MLX calibration mode passed to make convert-mlx (default: multimodal).",
+    )
     args = parser.parse_args()
 
-    # Tracking URI: explicit --tracking-uri overrides env var by setting it.
     if args.tracking_uri:
         os.environ["MLFLOW_TRACKING_URI"] = args.tracking_uri
-    # require_tracking_uri() reads MLFLOW_TRACKING_URI; exits 1 if unset/empty.
     tracking_uri = require_tracking_uri()
 
-    # Default mlx_out_dir mirrors Makefile: MLX_OUT_DIR ?= $(HF_PATH)-mlx.
     mlx_out_dir = args.mlx_out_dir if args.mlx_out_dir else f"{args.hf_path}-mlx"
 
     run_study(
@@ -444,6 +421,7 @@ def main() -> None:
         tracking_uri=tracking_uri,
         experiment_prefix=args.experiment_prefix,
         n_refusal_prompts=args.n_refusal_prompts,
+        calibration=args.calibration,
     )
 
 

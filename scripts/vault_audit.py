@@ -103,7 +103,7 @@ def load_tag_vocabulary(vault_path: Path) -> set[str]:
 # ---------------------------------------------------------------------------
 
 
-def audit_note(note_path: Path, tag_vocab: set[str], apply: bool) -> list[Finding]:  # noqa: PLR0912
+def audit_note(note_path: Path, tag_vocab: set[str], apply: bool = False) -> list[Finding]:  # noqa: PLR0912
     """Run all audit checks on a single note file."""
     findings: list[Finding] = []
     content = note_path.read_text(encoding="utf-8")
@@ -166,6 +166,8 @@ def audit_note(note_path: Path, tag_vocab: set[str], apply: bool) -> list[Findin
     tags = frontmatter.get("tags", [])
     if isinstance(tags, str):
         tags = [tags]
+    if tags is None:
+        tags = []
     for tag in tags:
         if tag and tag not in tag_vocab:
             findings.append(
@@ -177,6 +179,49 @@ def audit_note(note_path: Path, tag_vocab: set[str], apply: bool) -> list[Findin
                     severity=SEVERITY_ERROR,
                 )
             )
+
+    # Check tag cardinality (tags.md lines 17-19, Article XIV Rule 2):
+    # exactly one type/*, at least one domain/*, at most one status/*
+    type_tags = [t for t in tags if isinstance(t, str) and t.startswith("type/")]
+    domain_tags = [t for t in tags if isinstance(t, str) and t.startswith("domain/")]
+    status_tags = [t for t in tags if isinstance(t, str) and t.startswith("status/")]
+
+    if len(type_tags) != 1:
+        findings.append(
+            Finding(
+                note_path=str(note_path),
+                line=1,
+                rule="tag-cardinality-type",
+                message=(
+                    f"Note must carry exactly one type/* tag; "
+                    f"found {len(type_tags)}: {type_tags}"
+                ),
+                severity=SEVERITY_ERROR,
+            )
+        )
+    if len(domain_tags) == 0:
+        findings.append(
+            Finding(
+                note_path=str(note_path),
+                line=1,
+                rule="tag-cardinality-domain",
+                message="Note must carry at least one domain/* tag; found none",
+                severity=SEVERITY_ERROR,
+            )
+        )
+    if len(status_tags) > 1:
+        findings.append(
+            Finding(
+                note_path=str(note_path),
+                line=1,
+                rule="tag-cardinality-status",
+                message=(
+                    f"Note may carry at most one status/* tag; "
+                    f"found {len(status_tags)}: {status_tags}"
+                ),
+                severity=SEVERITY_ERROR,
+            )
+        )
 
     # Check dates are valid ISO 8601
     for date_field in ("created", "updated"):
@@ -259,22 +304,59 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="Path to the Obsidian vault directory",
     )
     parser.add_argument(
-        "--apply",
-        action="store_true",
-        help="Auto-fix fixable issues",
-    )
-    parser.add_argument(
         "--output",
         type=str,
         default=None,
         help="Write report JSON to file",
     )
-    parser.add_argument(
-        "--no-write",
-        action="store_true",
-        help="Dry run - do not modify files even with --apply",
-    )
     return parser.parse_args(argv)
+
+
+def find_orphan_notes(vault_root: Path, note_files: list[Path], hub: Path) -> list[Path]:
+    """Return governed notes not reachable from hub via [[wikilinks]] (BFS).
+
+    Article XIV Rule 4: a note without a resolving wikilink path from the hub
+    MUST NOT be created.  Returns an empty list when hub does not exist.
+    """
+    if not hub.exists():
+        return []
+
+    _wikilink_re = re.compile(r"\[\[([^\]|]+)(?:\|[^\]]+)?\]\]")
+
+    def _resolve(link_target: str, from_file: Path) -> Path | None:
+        link_target = link_target.strip()
+        for candidate in (
+            from_file.parent / f"{link_target}.md",
+            vault_root / f"{link_target}.md",
+        ):
+            if candidate.exists():
+                return candidate.resolve()
+        for md_file in vault_root.rglob(f"{link_target}.md"):
+            if md_file.is_file():
+                return md_file.resolve()
+        return None
+
+    visited: set[Path] = set()
+    queue: list[Path] = [hub.resolve()]
+    while queue:
+        current = queue.pop(0)
+        if current in visited:
+            continue
+        visited.add(current)
+        try:
+            content = current.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError):
+            continue
+        for match in _wikilink_re.finditer(content):
+            resolved = _resolve(match.group(1), current)
+            if resolved is not None and resolved not in visited:
+                queue.append(resolved)
+
+    hub_resolved = hub.resolve()
+    return [
+        f for f in note_files
+        if f.resolve() != hub_resolved and f.resolve() not in visited
+    ]
 
 
 def main() -> int:
@@ -296,9 +378,23 @@ def main() -> int:
     report = AuditReport()
 
     for note_path in note_files:
-        findings = audit_note(note_path, tag_vocab, args.apply)
-        for finding in findings:
+        for finding in audit_note(note_path, tag_vocab):
             report.add(finding)
+
+    hub = vault_root / "wellspring.md"
+    for orphan_path in find_orphan_notes(vault_root, note_files, hub):
+        report.add(
+            Finding(
+                note_path=str(orphan_path),
+                line=1,
+                rule="orphan-note",
+                message=(
+                    f"Note is not reachable from the hub ({hub.name}) "
+                    "via any wikilink path (Article XIV Rule 4)"
+                ),
+                severity=SEVERITY_ERROR,
+            )
+        )
 
     # Print findings
     for finding in report.errors:

@@ -86,15 +86,6 @@ def _derive_gguf_out_dir(hf_path: str) -> str:
     return f"{hf_path}-gguf"
 
 
-def _max_workers_for_topology(optimize_parallel: bool) -> int:
-    """Map the existing OPTIMIZE_PARALLEL 0/1 convention onto Metaflow's
-    own --max-workers flag (research.md item 4, empirically verified):
-    False (sequential, shared compute) -> 1; True (concurrent, dedicated
-    compute) -> Metaflow's own default of 16.
-    """
-    return 1 if not optimize_parallel else 16
-
-
 def _run_provenance_fields() -> dict[str, str]:
     """Return {"run_id": ..., "flow_name": ...} sourced from Metaflow's
     own always-populated `current` singleton — implements FR-008/SC-004's
@@ -128,7 +119,6 @@ class WellspringFlow(FlowSpec):
     mlflow_experiment_prefix = Parameter("mlflow_experiment_prefix", default="wellspring")
     n_trials_mlx = Parameter("n_trials_mlx", default=15)
     n_trials_gguf = Parameter("n_trials_gguf", default=15)
-    optimize_parallel = Parameter("optimize_parallel", default=False)
     study_checkpoint_dir = Parameter("study_checkpoint_dir", default="checkpoints")
     only_step = Parameter("only_step", default="")
 
@@ -173,6 +163,9 @@ class WellspringFlow(FlowSpec):
         "llama_perplexity_bin", default="ik_llama.cpp/build/bin/llama-perplexity"
     )
     llama_cli_bin = Parameter("llama_cli_bin", default="ik_llama.cpp/build/bin/llama-cli")
+    llama_server_bin = Parameter(
+        "llama_server_bin", default="ik_llama.cpp/build/bin/llama-server"
+    )
     n_gpu_layers = Parameter("n_gpu_layers", default=0)
     batch_size = Parameter("batch_size", default=0)
 
@@ -318,6 +311,13 @@ class WellspringFlow(FlowSpec):
     def log_to_mlflow(self):
         """Log every completed Heretic trial to MLflow (reuses `001`'s
         already-idempotent log_heretic_to_mlflow.main() unchanged — FR-006).
+
+        log_heretic_to_mlflow.main() returns 0 on success and 1 when the
+        journal is missing/unreadable or the study can't be loaded (its own
+        module docstring's "Exit codes" section). This step MUST fail on a
+        nonzero return rather than silently fanning out to the compression
+        searches on top of an unlogged (or partially logged) abliteration
+        run — Article VIII fail-fast.
         """
         if not self._should_skip("log_to_mlflow"):
             import log_heretic_to_mlflow
@@ -336,9 +336,17 @@ class WellspringFlow(FlowSpec):
             old_argv = sys.argv
             try:
                 sys.argv = argv
-                log_heretic_to_mlflow.main()
+                exit_code = log_heretic_to_mlflow.main()
             finally:
                 sys.argv = old_argv
+
+            if exit_code:
+                raise RuntimeError(
+                    f"log_heretic_to_mlflow.main() returned {exit_code} "
+                    "(journal missing/unreadable or study failed to load) "
+                    "-- failing log_to_mlflow rather than fanning out to "
+                    "the compression searches on top of unlogged results."
+                )
 
         self.next(self.mlx_search, self.gguf_search)
 
@@ -356,13 +364,29 @@ class WellspringFlow(FlowSpec):
         _require_apple_silicon()
 
         import optimize_mlx
+        from _mlflow_env import require_tracking_uri
+
+        # This step runs in its own Metaflow task process -- os.environ
+        # mutations made in start() do NOT cross that process boundary.
+        # optimize_mlx.run_study() (unlike optimize_mlx.main()) has no
+        # env-fallback of its own, so resolve the effective tracking URI
+        # here: an explicitly-passed --mlflow_tracking_uri wins; otherwise
+        # fall back to this process's own inherited MLFLOW_TRACKING_URI
+        # (the documented direct-invocation pattern of exporting the env
+        # var and never passing the flag). require_tracking_uri() fails
+        # fast, by name, if neither is set.
+        if self.mlflow_tracking_uri:
+            import os
+
+            os.environ["MLFLOW_TRACKING_URI"] = self.mlflow_tracking_uri
+        tracking_uri = require_tracking_uri()
 
         optimize_mlx.run_study(
             n_trials=self.n_trials_mlx,
             hf_path=self.resolved_hf_path,
             mlx_out_dir=_derive_mlx_out_dir(self.resolved_hf_path),
             text_path="calibration-text.txt",
-            tracking_uri=self.mlflow_tracking_uri,
+            tracking_uri=tracking_uri,
             experiment_prefix=self.mlflow_experiment_prefix,
             extra_manifest_fields=_run_provenance_fields(),
         )
@@ -389,6 +413,7 @@ class WellspringFlow(FlowSpec):
             "--gguf-out-dir", gguf_out_dir,
             "--llama-perplexity-bin", self.llama_perplexity_bin,
             "--llama-cli-bin", self.llama_cli_bin,
+            "--llama-server-bin", self.llama_server_bin,
             "--tracking-uri", self.mlflow_tracking_uri,
             "--experiment-prefix", self.mlflow_experiment_prefix,
         ]

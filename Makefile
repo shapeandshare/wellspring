@@ -140,6 +140,7 @@ N_TRIALS_GGUF ?= 15
 # Built by build-llama-cpp below (extended target list).
 LLAMA_PERPLEXITY ?= $(LLAMA_CPP_DIR)/build/bin/llama-perplexity
 LLAMA_CLI        ?= $(LLAMA_CPP_DIR)/build/bin/llama-cli
+LLAMA_SERVER     ?= $(LLAMA_CPP_DIR)/build/bin/llama-server
 # Compute-topology switch for the combined `optimize` target (FR-015):
 # 0 (default) = sequential -- both searches assumed to share one compute
 # resource (a single local machine or hosted instance); 1 = concurrent --
@@ -285,7 +286,7 @@ MAX_TOKENS ?= 100
 # Empty by default (script's own defaults apply).
 PREFLIGHT_ARGS ?=
 
-.PHONY: help setup venv install test vault-audit vault-audit-apply vendor-heretic abliterate dev-abliterate dev-abliterate-e2e log-abliteration-mlflow convert-mlx calibration-data build-llama-cpp calibration-text convert-gguf quantize-gguf gguf generate-mlx paper lock notices clean doctor dev-doctor slides slides-pdf slides-watch optimize-mlx optimize-gguf optimize _stub-mlx _stub-gguf _stub-optimize
+.PHONY: help setup venv install test vault-audit vendor-heretic abliterate dev-abliterate dev-abliterate-e2e log-abliteration-mlflow convert-mlx calibration-data build-llama-cpp calibration-text convert-gguf quantize-gguf gguf generate-mlx paper lock notices clean doctor dev-doctor slides slides-pdf slides-watch optimize-mlx optimize-gguf optimize _stub-mlx _stub-gguf _stub-optimize
 
 help:
 	@echo "Wellspring: Heretic + MLX/GGUF workflow"
@@ -297,8 +298,7 @@ help:
 	@echo "  make test                           Run the pytest suite (tests/) -- see the"
 	@echo "                                       constitution's Article IX (TDD, NON-NEGOTIABLE)"
 	@echo "  make vault-audit                    Mechanical vault/ integrity check (frontmatter,"
-	@echo "                                       tags, wikilinks, code-refs) -- report only"
-	@echo "  make vault-audit-apply              Same, with safe auto-fixes applied in place"
+	@echo "                                       tags, wikilinks, code-refs, orphan detection)"
 	@echo "  make abliterate [MODEL=org/name]    Run heretic against MODEL (default: $(MODEL))"
 	@echo "                                       heretic will interactively ask what to do with"
 	@echo "                                       the result -- choose save, then enter a path"
@@ -457,14 +457,10 @@ test: install
 	$(PYTHON) -m pytest tests/ -v
 
 # Vault integrity: mechanical audit of vault/ (frontmatter, tag vocabulary,
-# wikilinks, code-refs) -- see the constitution's Article XIV and
-# vault/decisions/ for the adoption rationale. Report-only by default;
-# --apply is a local operation, never run automatically.
+# wikilinks, code-refs, orphan detection) -- see the constitution's Article XIV
+# and vault/decisions/ for the adoption rationale.
 vault-audit: install
 	$(PYTHON) scripts/vault_audit.py vault
-
-vault-audit-apply: install
-	$(PYTHON) scripts/vault_audit.py vault --apply
 
 abliterate: install
 	@echo "==> Abliterating $(MODEL)"
@@ -605,6 +601,7 @@ optimize-gguf: install
 		--n_trials_gguf "$(N_TRIALS_GGUF)" \
 		--llama_perplexity_bin "$(LLAMA_PERPLEXITY)" \
 		--llama_cli_bin "$(LLAMA_CLI)" \
+		--llama_server_bin "$(LLAMA_SERVER)" \
 		$(if $(filter ON,$(GGML_CUDA)),--n_gpu_layers $(LLAMA_NGL),) \
 		--mlflow_tracking_uri "$(MLFLOW_TRACKING_URI)" \
 		--mlflow_experiment_prefix "$(MLFLOW_EXPERIMENT_PREFIX)"
@@ -650,7 +647,7 @@ build-llama-cpp:
 	cmake -B "$(LLAMA_CPP_DIR)/build" -S "$(LLAMA_CPP_DIR)" -DGGML_NATIVE=ON -DCMAKE_BUILD_TYPE=Release -G Ninja \
 		-DGGML_CUDA=$(GGML_CUDA) \
 		$(if $(CUDA_ARCHITECTURES),-DCMAKE_CUDA_ARCHITECTURES="$(CUDA_ARCHITECTURES)")
-	cmake --build "$(LLAMA_CPP_DIR)/build" --config Release -j --target llama-imatrix llama-quantize llama-perplexity llama-cli
+	cmake --build "$(LLAMA_CPP_DIR)/build" --config Release -j --target llama-imatrix llama-quantize llama-perplexity llama-cli llama-server
 
 calibration-text: install
 	@echo "==> Fetching $(CALIB_TEXT_SAMPLES) chat/instruction samples (seed $(CALIB_TEXT_SEED)) from the $(CALIB_TEXT_SPLIT) split of $(CALIB_TEXT_DATASET) @ $(CALIB_TEXT_REVISION) into $(CALIB_TEXT_FILE)"
@@ -725,9 +722,10 @@ gguf: convert-gguf
 # cluster/orchestrated scenario assigning each search its own node).
 # One flow invocation covers both searches; --max-workers maps OPTIMIZE_PARALLEL
 # onto Metaflow's own branch-concurrency flag directly in Make (simpler and
-# more robust than shelling into Python for a two-value 0/1 -> 1/16 mapping;
-# matches flow.py's own _max_workers_for_topology() helper's mapping exactly
-# and is unit-tested there — see tests/test_flow.py).
+# more robust than shelling into Python for a two-value 0/1 -> 1/16 mapping).
+# flow.py itself has no OPTIMIZE_PARALLEL-equivalent Parameter -- a native
+# `python flow.py run` invocation passes Metaflow's own --max-workers flag
+# directly (see README.md's "Orchestration via Metaflow" section).
 ifeq ($(OPTIMIZE_PARALLEL),1)
 OPTIMIZE_MAX_WORKERS := 16
 else

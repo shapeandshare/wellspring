@@ -71,8 +71,10 @@ import datetime
 import json
 import os
 import shutil
+import socket
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 import mlflow
@@ -94,14 +96,13 @@ from _mlflow_env import require_tracking_uri
 GGUF_QUANT_CHOICES: list[str] = ["Q3_K_M", "Q4_K_M", "Q5_K_M", "Q6_K", "Q8_0"]
 
 # Number of harmful prompts to evaluate per trial for the refusal-rate score.
-# Kept small (10) because each prompt requires a full llama-cli inference pass.
 N_REFUSAL_PROMPTS: int = 10
 
-# Timeout (seconds) for each llama-cli call: must cover a cold model load
-# (no page cache) + generation, called once per refusal prompt per trial.
-# Matches eval_perplexity_gguf.py's _TIMEOUT=300, replacing a prior 120s
-# that risked being too tight for a large model loading cold with -ngl.
+# Timeout (seconds) for each llama-server /completion HTTP call.
 _LLAMA_CLI_TIMEOUT: int = 300
+
+# Timeout (seconds) for llama-server to bind its port after Popen launch.
+_LLAMA_SERVER_STARTUP_TIMEOUT: int = 120
 
 # Seed for NSGAIISampler: fixed so test runs are deterministic.
 _SAMPLER_SEED: int = 42
@@ -175,6 +176,111 @@ def _write_manifest_entry(manifest_path: Path, entry: dict) -> None:
 
 
 # ---------------------------------------------------------------------------
+# llama-server helpers (Finding A: one model load per trial)
+# ---------------------------------------------------------------------------
+
+
+def _find_free_port() -> int:
+    """Return an available ephemeral TCP port on localhost."""
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.bind(("127.0.0.1", 0))
+        s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        return s.getsockname()[1]
+
+
+def _wait_for_server_ready(port: int, timeout: int = _LLAMA_SERVER_STARTUP_TIMEOUT) -> None:
+    """Poll localhost:port until it accepts a TCP connection or timeout elapses."""
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        try:
+            with socket.create_connection(("127.0.0.1", port), timeout=1.0):
+                return
+        except OSError:
+            time.sleep(0.25)
+    raise RuntimeError(
+        f"llama-server on port {port} did not become ready within {timeout}s"
+    )
+
+
+def _http_completion(port: int, prompt: str, n_predict: int = 100) -> str:
+    """POST prompt to llama-server /completion; return generated text."""
+    import http.client
+    payload = json.dumps({"prompt": prompt, "n_predict": n_predict}).encode("utf-8")
+    conn = http.client.HTTPConnection("127.0.0.1", port, timeout=_LLAMA_CLI_TIMEOUT)
+    try:
+        conn.request(
+            "POST",
+            "/completion",
+            body=payload,
+            headers={"Content-Type": "application/json"},
+        )
+        resp = conn.getresponse()
+        return json.loads(resp.read().decode("utf-8")).get("content", "").strip()
+    finally:
+        conn.close()
+
+
+# ---------------------------------------------------------------------------
+# Per-trial provenance helpers (Finding B: schema at artifact creation)
+# ---------------------------------------------------------------------------
+
+
+def _write_trial_provenance_initial(
+    sidecar_path: Path,
+    trial_number: int,
+    archived_path: Path,
+    quant: str,
+    calib_samples: int,
+    repo_root: Path,
+) -> None:
+    """Write provenance sidecar at artifact-creation time (before scoring)."""
+    import write_manifest as _wm
+    llama_cpp_dir = repo_root / "ik_llama.cpp"
+    tool_commits: dict = {}
+    if llama_cpp_dir.is_dir():
+        llama_commit = _wm.git_commit(str(llama_cpp_dir))
+        if llama_commit:
+            tool_commits["ik_llama.cpp"] = llama_commit
+    record: dict = {
+        "archive_path": str(archived_path),
+        "calib_text_samples": calib_samples,
+        "created_at_utc": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+        "gguf_quant": quant,
+        "status": "pending",
+        "tool_commits": tool_commits,
+        "trial_number": trial_number,
+        "wellspring_commit": _wm.git_commit(str(repo_root)),
+        "wellspring_dirty": _wm.git_dirty(str(repo_root)),
+    }
+    tmp = Path(str(sidecar_path) + ".tmp")
+    tmp.write_text(json.dumps(record, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    tmp.replace(sidecar_path)
+
+
+def _update_trial_provenance(
+    sidecar_path: Path,
+    perplexity: float,
+    refusal_rate: float,
+) -> None:
+    """Update the existing sidecar with final scoring results (two-phase write)."""
+    record: dict = {}
+    if sidecar_path.exists():
+        try:
+            record = json.loads(sidecar_path.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            record = {}
+    record.update({
+        "perplexity": perplexity,
+        "refusal_rate": refusal_rate,
+        "scored_at_utc": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+        "status": "complete",
+    })
+    tmp = Path(str(sidecar_path) + ".tmp")
+    tmp.write_text(json.dumps(record, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    tmp.replace(sidecar_path)
+
+
+# ---------------------------------------------------------------------------
 # Optuna objective factory
 # ---------------------------------------------------------------------------
 
@@ -186,48 +292,18 @@ def _build_objective(
     text_path: str,
     llama_perplexity_bin: str,
     llama_cli_bin: str,
+    llama_server_bin: str,
     repo_root: Path,
     n_gpu_layers: int = 0,
     extra_manifest_fields: dict[str, str] | None = None,
 ):
-    """Return an Optuna objective closure for the GGUF quantisation search.
-
-    Args:
-        gguf_out_dir:  GGUF_OUT_DIR — where make quantize-gguf writes output.
-        gguf_f16:      GGUF_F16_GGUF — the full-resolution source file
-                       quantize-gguf reads back in. MUST be passed to the
-                       `make quantize-gguf` subprocess call explicitly —
-                       omitting it lets the Makefile's own MODEL/HF_PATH
-                       defaults resolve GGUF_F16_GGUF silently, which is
-                       wrong for any model other than the Makefile's
-                       hardcoded default (found via live e2e testing,
-                       2026-09-27 — see vault/discoveries/).
-        archive_root:  Sibling directory for archived trial files and study.db.
-        text_path:     Held-out text file for perplexity evaluation.
-        llama_perplexity_bin: Path to the llama-perplexity binary.
-        llama_cli_bin: Path to the llama-cli binary.
-        repo_root:     Repository root; passed as cwd to subprocess.run so
-                       the Makefile is found at the expected location.
-        n_gpu_layers:  Layers to offload to GPU via llama.cpp's -ngl flag,
-                       forwarded to both llama-perplexity and llama-cli.
-                       0 (default) omits the flag (CPU-only).
-
-    Returns:
-        An objective function ``(trial) -> tuple[float, float]`` suitable
-        for ``study.optimize(objective, ...)``.
-    """
+    """Return an Optuna objective closure for the GGUF quantisation search."""
     manifest_path = archive_root / "manifest.json"
 
     def objective(trial: optuna.Trial) -> tuple[float, float]:
-        # ---- suggest parameters ----
         quant: str = trial.suggest_categorical("GGUF_QUANT", GGUF_QUANT_CHOICES)
         calib_samples: int = trial.suggest_int("CALIB_TEXT_SAMPLES", 50, 100)
 
-        # ---- run `make quantize-gguf` with ONE quant value ----
-        # NEVER invoke `make convert-gguf` here — that would repeat the
-        # expensive F16 conversion once per trial (FR-010).  We reuse the
-        # existing F16 output produced by the one-time `make convert-gguf`
-        # run that precedes this search.
         make_result = subprocess.run(
             [
                 "make",
@@ -248,19 +324,21 @@ def _build_objective(
                 f"stderr: {make_result.stderr[:500]!r}"
             )
 
-        # ---- archive immediately (FR-009) ----
-        # quantize-gguf's recipe runs `find "$(GGUF_OUT_DIR)" -maxdepth 1
-        # -name 'model-*.gguf' ! -name "$(notdir $(GGUF_F16_GGUF))" -delete`
-        # at the START of the NEXT trial's make call.  Copy the file out to
-        # archive_root NOW, before that cleanup runs, so the artifact survives.
-        # The naming pattern is confirmed from the Makefile recipe:
-        #   "$(GGUF_OUT_DIR)/model-$$q.gguf"
         src_path = Path(gguf_out_dir) / f"model-{quant}.gguf"
         archived_path = archive_root / f"trial-{trial.number}.gguf"
         archive_root.mkdir(parents=True, exist_ok=True)
         shutil.copy2(str(src_path), str(archived_path))
 
-        # ---- score: perplexity ----
+        sidecar_path = archive_root / f"trial-{trial.number}.provenance.json"
+        _write_trial_provenance_initial(
+            sidecar_path=sidecar_path,
+            trial_number=trial.number,
+            archived_path=archived_path,
+            quant=quant,
+            calib_samples=calib_samples,
+            repo_root=repo_root,
+        )
+
         perplexity = eval_perplexity_gguf.compute_perplexity(
             str(archived_path),
             text_path,
@@ -268,43 +346,44 @@ def _build_objective(
             n_gpu_layers=n_gpu_layers,
         )
 
-        # ---- score: refusal rate ----
-        # The generate callback shells out to llama-cli against the archived
-        # GGUF file.  llama-cli stdout is the completion text; we use
-        # --no-display-prompt to suppress the prompt echo.  As a defensive
-        # fallback we also strip the literal prompt prefix if llama-cli
-        # echoes it despite the flag (older builds may not honour it).
-        # Simplifying assumption: prompt text appears literally at the start
-        # of stdout when echoed — may not hold for complex prompt templates
-        # but is correct for llama-cli's default behaviour with -p.
-        def generate(prompt: str) -> str:
-            cli_cmd = [
-                llama_cli_bin,
-                "-m", str(archived_path),
-                "-p", prompt,
-                "-n", "100",
-                "--no-display-prompt",
-            ]
-            if n_gpu_layers > 0:
-                cli_cmd += ["-ngl", str(n_gpu_layers)]
-            cli_result = subprocess.run(
-                cli_cmd,
-                capture_output=True,
-                text=True,
-                timeout=_LLAMA_CLI_TIMEOUT,
-            )
-            output = cli_result.stdout
-            # Defensive: strip echoed prompt prefix if present.
-            if output.startswith(prompt):
-                output = output[len(prompt):]
-            return output.strip()
+        server_port = _find_free_port()
+        server_cmd = [
+            llama_server_bin,
+            "-m", str(archived_path),
+            "--port", str(server_port),
+        ]
+        if n_gpu_layers > 0:
+            server_cmd += ["-ngl", str(n_gpu_layers)]
 
-        refusal_rate = eval_refusal_rate.compute_refusal_rate(
-            generate=generate,
-            n_prompts=N_REFUSAL_PROMPTS,
+        server_proc = subprocess.Popen(
+            server_cmd,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        try:
+            _wait_for_server_ready(server_port)
+
+            def generate(prompt: str) -> str:
+                return _http_completion(server_port, prompt)
+
+            refusal_rate = eval_refusal_rate.compute_refusal_rate(
+                generate=generate,
+                n_prompts=N_REFUSAL_PROMPTS,
+            )
+        finally:
+            server_proc.terminate()
+            try:
+                server_proc.wait(timeout=30)
+            except subprocess.TimeoutExpired:
+                server_proc.kill()
+                server_proc.wait()
+
+        _update_trial_provenance(
+            sidecar_path=sidecar_path,
+            perplexity=perplexity,
+            refusal_rate=refusal_rate,
         )
 
-        # ---- append manifest entry (atomic write) ----
         _write_manifest_entry(
             manifest_path,
             {
@@ -316,13 +395,12 @@ def _build_objective(
                 "gguf_quant": quant,
                 "perplexity": perplexity,
                 "refusal_rate": refusal_rate,
+                "refusal_rate_dataset_revision": eval_refusal_rate.DEFAULT_REVISION,
                 "trial_number": trial.number,
                 **(extra_manifest_fields or {}),
             },
         )
 
-        # ---- log to MLflow (both metrics independent; FR-007) ----
-        # Uses the active experiment set by mlflow.set_experiment() in main().
         with mlflow.start_run():
             mlflow.log_params({
                 "GGUF_QUANT": quant,
@@ -334,11 +412,6 @@ def _build_objective(
             })
             mlflow.set_tag("trial_number", str(trial.number))
 
-        # Both "minimize" (data-model.md). CAUTION: compute_refusal_rate()
-        # returns the fraction of prompts REFUSED (higher = more censored) --
-        # minimize it directly, do NOT invert to "1 - rate" (that tells the
-        # search to maximize refusals, backwards from this project's
-        # decensoring goal -- see the identical fix in optimize_mlx.py).
         return perplexity, refusal_rate
 
     return objective
@@ -396,6 +469,11 @@ def main() -> None:
         "--llama-cli-bin",
         default="ik_llama.cpp/build/bin/llama-cli",
         help="Path to the llama-cli binary (LLAMA_CLI).",
+    )
+    parser.add_argument(
+        "--llama-server-bin",
+        default="ik_llama.cpp/build/bin/llama-server",
+        help="Path to the llama-server binary for refusal-rate scoring (LLAMA_SERVER).",
     )
     parser.add_argument(
         "--n-gpu-layers",
@@ -497,6 +575,7 @@ def main() -> None:
         text_path=args.text_path,
         llama_perplexity_bin=args.llama_perplexity_bin,
         llama_cli_bin=args.llama_cli_bin,
+        llama_server_bin=args.llama_server_bin,
         repo_root=repo_root,
         n_gpu_layers=args.n_gpu_layers,
         extra_manifest_fields=extra_manifest_fields,

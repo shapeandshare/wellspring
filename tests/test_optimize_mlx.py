@@ -22,6 +22,8 @@ import pytest
 from optimize_mlx import (  # scripts/ on sys.path via conftest — RED until implemented
     _is_ancestor_or_descendant,
     run_study,
+    _SAMPLER_SEED,
+    STUDY_NAME,
 )
 
 
@@ -53,11 +55,14 @@ def env(tmp_path: Path):
 
 
 def _fake_subprocess(mlx_out_dir: str, fail_on_calls: set[int] | None = None):
-    """Return (mock_fn, call_counter[]) where mock_fn simulates convert-mlx.
+    """Return (mock_fn, call_counter[]) where mock_fn simulates make invocations.
 
-    If fail_on_calls is a set of call indices, those calls return returncode=1.
-    Successful calls create a tiny fake directory at mlx_out_dir (as a real
-    convert-mlx would) so that shutil.copytree can archive it.
+    If fail_on_calls is a set of call indices (counting ALL subprocess calls,
+    including calibration-data calls), those calls return returncode=1.
+
+    Only ``make convert-mlx`` calls create a fake directory at mlx_out_dir
+    (as a real convert-mlx would) so that shutil.copytree can archive it.
+    ``make calibration-data`` calls succeed silently without touching mlx_out_dir.
     """
     counter: list[int] = [0]
     fail_set = fail_on_calls or set()
@@ -67,13 +72,14 @@ def _fake_subprocess(mlx_out_dir: str, fail_on_calls: set[int] | None = None):
         counter[0] += 1
         if idx in fail_set:
             return MagicMock(returncode=1, stdout="", stderr="ERROR: conversion failed")
-        p = Path(mlx_out_dir)
-        if p.exists():
-            shutil.rmtree(p)
-        p.mkdir(parents=True)
-        (p / "config.json").write_text(
-            '{"model_type": "qwen3", "num_hidden_layers": 2}'
-        )
+        if "convert-mlx" in cmd:
+            p = Path(mlx_out_dir)
+            if p.exists():
+                shutil.rmtree(p)
+            p.mkdir(parents=True)
+            (p / "config.json").write_text(
+                '{"model_type": "qwen3", "num_hidden_layers": 2}'
+            )
         return MagicMock(returncode=0, stdout="", stderr="")
 
     return _run, counter
@@ -473,3 +479,187 @@ def test_extra_manifest_fields_omitted_is_unchanged(
     entries = json.loads(manifest_path.read_text(encoding="utf-8"))
     assert "run_id" not in entries[0]
     assert "flow_name" not in entries[0]
+
+
+# ---------------------------------------------------------------------------
+# Finding A — AWQ calibration-data regeneration (SC-A01 / SC-A02)
+# ---------------------------------------------------------------------------
+
+
+def test_awq_trial_calls_calibration_data_before_convert_mlx(
+    env: dict, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    archive_root = Path(env["archive_root"])
+    archive_root.mkdir(parents=True, exist_ok=True)
+    storage_url = f"sqlite:///{archive_root}/study.db"
+    pre_study = optuna.create_study(
+        study_name="optimize-mlx",
+        storage=storage_url,
+        sampler=optuna.samplers.NSGAIISampler(seed=_SAMPLER_SEED),
+        directions=["minimize", "minimize"],
+        load_if_exists=True,
+    )
+    pre_study.enqueue_trial(
+        {"Q_BITS": 4, "Q_GROUP_SIZE": 32, "QUANT_METHOD": "awq", "CALIB_SAMPLES": 32}
+    )
+
+    calls_log: list[list[str]] = []
+
+    def mock_run(cmd, **kwargs):
+        calls_log.append(list(cmd))
+        if "convert-mlx" in cmd:
+            p = Path(env["mlx_out_dir"])
+            if p.exists():
+                shutil.rmtree(p)
+            p.mkdir(parents=True)
+            (p / "config.json").write_text('{"model_type": "qwen3", "num_hidden_layers": 2}')
+        return MagicMock(returncode=0, stdout="", stderr="")
+
+    monkeypatch.setattr("optimize_mlx.subprocess.run", mock_run)
+    monkeypatch.setattr("optimize_mlx.compute_perplexity", lambda *a, **kw: 4.0)
+    monkeypatch.setattr("optimize_mlx.compute_refusal_rate", lambda *a, **kw: 0.5)
+
+    run_study(
+        n_trials=1,
+        hf_path=env["hf_path"],
+        mlx_out_dir=env["mlx_out_dir"],
+        text_path=env["text_path"],
+        tracking_uri=env["tracking_uri"],
+    )
+
+    make_calls = [cmd for cmd in calls_log if cmd and cmd[0] == "make"]
+    assert len(make_calls) == 2, (
+        f"Expected exactly 2 make calls for AWQ trial "
+        f"(calibration-data then convert-mlx), got {len(make_calls)}: {make_calls}"
+    )
+    assert "calibration-data" in make_calls[0], (
+        f"First make call should be calibration-data, got: {make_calls[0]}"
+    )
+    assert any("CALIB_SAMPLES=32" in arg for arg in make_calls[0]), (
+        f"calibration-data call missing CALIB_SAMPLES=32: {make_calls[0]}"
+    )
+    assert "convert-mlx" in make_calls[1], (
+        f"Second make call should be convert-mlx, got: {make_calls[1]}"
+    )
+    assert any("QUANT_METHOD=awq" in arg for arg in make_calls[1]), (
+        f"convert-mlx call missing QUANT_METHOD=awq: {make_calls[1]}"
+    )
+
+
+def test_rtn_trial_does_not_call_calibration_data(
+    env: dict, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    archive_root = Path(env["archive_root"])
+    archive_root.mkdir(parents=True, exist_ok=True)
+    storage_url = f"sqlite:///{archive_root}/study.db"
+    pre_study = optuna.create_study(
+        study_name="optimize-mlx",
+        storage=storage_url,
+        sampler=optuna.samplers.NSGAIISampler(seed=_SAMPLER_SEED),
+        directions=["minimize", "minimize"],
+        load_if_exists=True,
+    )
+    pre_study.enqueue_trial({"Q_BITS": 4, "Q_GROUP_SIZE": 32, "QUANT_METHOD": "rtn"})
+
+    calls_log: list[list[str]] = []
+
+    def mock_run(cmd, **kwargs):
+        calls_log.append(list(cmd))
+        if "convert-mlx" in cmd:
+            p = Path(env["mlx_out_dir"])
+            if p.exists():
+                shutil.rmtree(p)
+            p.mkdir(parents=True)
+            (p / "config.json").write_text('{"model_type": "qwen3", "num_hidden_layers": 2}')
+        return MagicMock(returncode=0, stdout="", stderr="")
+
+    monkeypatch.setattr("optimize_mlx.subprocess.run", mock_run)
+    monkeypatch.setattr("optimize_mlx.compute_perplexity", lambda *a, **kw: 4.0)
+    monkeypatch.setattr("optimize_mlx.compute_refusal_rate", lambda *a, **kw: 0.5)
+
+    run_study(
+        n_trials=1,
+        hf_path=env["hf_path"],
+        mlx_out_dir=env["mlx_out_dir"],
+        text_path=env["text_path"],
+        tracking_uri=env["tracking_uri"],
+    )
+
+    make_calls = [cmd for cmd in calls_log if cmd and cmd[0] == "make"]
+    assert len(make_calls) == 1, (
+        f"Expected exactly 1 make call for RTN trial (convert-mlx only), "
+        f"got {len(make_calls)}: {make_calls}"
+    )
+    assert "convert-mlx" in make_calls[0], (
+        f"RTN trial's only make call should be convert-mlx, got: {make_calls[0]}"
+    )
+    assert not any("calibration-data" in arg for arg in make_calls[0]), (
+        f"RTN trial must not invoke calibration-data: {make_calls[0]}"
+    )
+
+
+# ---------------------------------------------------------------------------
+# Finding B — manifest wellspring_commit/wellspring_dirty provenance (SC-B01 / SC-B02)
+# ---------------------------------------------------------------------------
+
+
+def test_manifest_entry_has_wellspring_provenance(
+    env: dict, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    fake_run, _ = _fake_subprocess(env["mlx_out_dir"])
+    monkeypatch.setattr("optimize_mlx.subprocess.run", fake_run)
+    monkeypatch.setattr("optimize_mlx.compute_perplexity", lambda *a, **kw: 4.0)
+    monkeypatch.setattr("optimize_mlx.compute_refusal_rate", lambda *a, **kw: 0.5)
+
+    run_study(
+        n_trials=1,
+        hf_path=env["hf_path"],
+        mlx_out_dir=env["mlx_out_dir"],
+        text_path=env["text_path"],
+        tracking_uri=env["tracking_uri"],
+    )
+
+    manifest_path = Path(env["archive_root"]) / "manifest.json"
+    entries = json.loads(manifest_path.read_text(encoding="utf-8"))
+    assert len(entries) == 1
+    entry = entries[0]
+    assert "wellspring_commit" in entry, f"Entry missing 'wellspring_commit': {entry!r}"
+    assert "wellspring_dirty" in entry, f"Entry missing 'wellspring_dirty': {entry!r}"
+    assert "perplexity" in entry, f"Entry missing 'perplexity': {entry!r}"
+    assert "refusal_rate" in entry, f"Entry missing 'refusal_rate': {entry!r}"
+    assert entry["perplexity"] == 4.0
+    assert entry["refusal_rate"] == 0.5
+
+
+def test_manifest_entry_persists_on_scoring_failure(
+    env: dict, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def _fail_perplexity(*a, **kw):
+        raise RuntimeError("scoring blew up")
+
+    fake_run, _ = _fake_subprocess(env["mlx_out_dir"])
+    monkeypatch.setattr("optimize_mlx.subprocess.run", fake_run)
+    monkeypatch.setattr("optimize_mlx.compute_perplexity", _fail_perplexity)
+    monkeypatch.setattr("optimize_mlx.compute_refusal_rate", lambda *a, **kw: 0.5)
+
+    run_study(
+        n_trials=1,
+        hf_path=env["hf_path"],
+        mlx_out_dir=env["mlx_out_dir"],
+        text_path=env["text_path"],
+        tracking_uri=env["tracking_uri"],
+    )
+
+    manifest_path = Path(env["archive_root"]) / "manifest.json"
+    assert manifest_path.exists(), "manifest.json must exist even after scoring failure"
+    entries = json.loads(manifest_path.read_text(encoding="utf-8"))
+    assert len(entries) == 1, (
+        f"Expected 1 create-time entry even on scoring failure, got {len(entries)}"
+    )
+    entry = entries[0]
+    assert "wellspring_commit" in entry, f"Provenance key missing from failed-trial entry: {entry!r}"
+    assert "wellspring_dirty" in entry, f"Provenance key missing from failed-trial entry: {entry!r}"
+    assert "trial_number" in entry
+    assert "archive_path" in entry
+    assert entry.get("perplexity") is None, "Perplexity must be None on scoring failure"
+    assert entry.get("refusal_rate") is None, "refusal_rate must be None on scoring failure"

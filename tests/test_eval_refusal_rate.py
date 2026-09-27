@@ -11,6 +11,7 @@ mechanism already used in scripts/fetch_calibration_text.py.
 """
 
 import json
+import urllib.parse
 import urllib.request
 from typing import Any
 
@@ -93,3 +94,99 @@ def test_compute_refusal_rate_raises_for_zero_n_prompts(
         err.compute_refusal_rate(generate=lambda p: "Sure.", n_prompts=0)
 
     assert called == [], "urlopen must not be called when n_prompts <= 0"
+
+
+# ---------------------------------------------------------------------------
+# Revision pinning (PROVENANCE.md §57-59 / GitHub Copilot finding, line 156)
+# ---------------------------------------------------------------------------
+
+
+def _capturing_urlopen_factory(rows: list[dict[str, Any]], captured: list[str]):
+    """Like _fake_urlopen_factory but also records every URL called."""
+
+    def fake_urlopen(url: str, timeout: float | None = None) -> _FakeResponse:
+        assert url.startswith(err.FIRST_ROWS_URL)
+        captured.append(url)
+        return _FakeResponse(json.dumps({"rows": rows}).encode("utf-8"))
+
+    return fake_urlopen
+
+
+def test_compute_refusal_rate_default_revision_in_query(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """No explicit revision arg -> query must include the PROVENANCE-pinned commit.
+
+    PROVENANCE.md lines 57-59 pins mlabonne/harmful_behaviors to commit
+    01cead01398926d81f7c52bdb790ee8cf77ebba7.  When the caller passes no
+    revision (the common case), compute_refusal_rate() must inject that exact
+    SHA into the /first-rows query so scores are reproducible.
+    """
+    captured: list[str] = []
+    monkeypatch.setattr(
+        err.urllib.request,
+        "urlopen",
+        _capturing_urlopen_factory(_fixture_rows(), captured),
+    )
+    err.compute_refusal_rate(generate=lambda p: "Sure.", n_prompts=1)
+
+    assert captured, "urlopen was never called"
+    parsed = urllib.parse.urlparse(captured[0])
+    params = urllib.parse.parse_qs(parsed.query)
+    assert "revision" in params, (
+        f"'revision' absent from /first-rows query params: {params!r}; "
+        "PROVENANCE.md §57-59 requires the pinned commit to be sent."
+    )
+    assert params["revision"] == [err.DEFAULT_REVISION], (
+        f"Expected DEFAULT_REVISION {err.DEFAULT_REVISION!r}, got {params['revision']!r}"
+    )
+
+
+def test_compute_refusal_rate_explicit_revision_overrides_default(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An explicit revision= kwarg replaces the pinned default in the query."""
+    custom_rev = "abc123def456feedbeef"
+    captured: list[str] = []
+    monkeypatch.setattr(
+        err.urllib.request,
+        "urlopen",
+        _capturing_urlopen_factory(_fixture_rows(), captured),
+    )
+    err.compute_refusal_rate(generate=lambda p: "Sure.", n_prompts=1, revision=custom_rev)
+
+    assert captured, "urlopen was never called"
+    parsed = urllib.parse.urlparse(captured[0])
+    params = urllib.parse.parse_qs(parsed.query)
+    assert "revision" in params, f"'revision' absent from query: {params!r}"
+    assert params["revision"] == [custom_rev], (
+        f"Expected explicit revision {custom_rev!r}, got {params['revision']!r}"
+    )
+
+
+def test_compute_refusal_rate_none_revision_uses_default(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Passing revision=None explicitly must still inject DEFAULT_REVISION.
+
+    Callers that do not know the current pin can pass None; the function
+    must fall back to DEFAULT_REVISION rather than omitting the param.
+    """
+    captured: list[str] = []
+    monkeypatch.setattr(
+        err.urllib.request,
+        "urlopen",
+        _capturing_urlopen_factory(_fixture_rows(), captured),
+    )
+    err.compute_refusal_rate(generate=lambda p: "Sure.", n_prompts=1, revision=None)
+
+    assert captured, "urlopen was never called"
+    parsed = urllib.parse.urlparse(captured[0])
+    params = urllib.parse.parse_qs(parsed.query)
+    assert "revision" in params, (
+        f"'revision' absent from query when revision=None: {params!r}; "
+        "None must fall back to DEFAULT_REVISION, not omit the param."
+    )
+    assert params["revision"] == [err.DEFAULT_REVISION], (
+        f"Expected DEFAULT_REVISION {err.DEFAULT_REVISION!r}, got {params['revision']!r}"
+    )

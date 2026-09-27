@@ -25,6 +25,7 @@ Session-level decisions with context and consequences.
 
 - `[[2026-09-26-metaflow-orchestration-wraps-not-reimplements]]`
 - `[[2026-09-26-metaflow-flag-naming-underscored]]`
+- `[[2026-09-27-llama-server-for-single-model-load-per-trial]]`
 
 ### Discoveries
 
@@ -41,6 +42,8 @@ Non-obvious constraints, gaps, and conflicts that cost discovery time.
 Append-only session activity logs, never pruned.
 
 - `[[2026-09-26-metaflow-migration-implementation]]`
+- `[[2026-09-27-eval-refusal-rate-revision-pinning]]`
+- `[[2026-09-27-fix-pr-findings-optimize-gguf]]`
 
 ## Reference
 

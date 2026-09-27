@@ -29,7 +29,7 @@ import subprocess
 import sys
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import mlflow
 import optuna
@@ -140,11 +140,16 @@ def _run_optimize_with_mocks(
         return max(0.05, 0.25 - per_call_counter[0] * 0.04)  # distinct per call
 
     # ---- run main() with patched environment ----
+    _mock_server_proc = MagicMock()
+    _mock_server_proc.wait.return_value = 0
+
     original_argv = sys.argv[:]
     original_tracking_uri = os.environ.get("MLFLOW_TRACKING_URI")
     try:
         with (
             patch("subprocess.run", side_effect=subprocess_side_effect),
+            patch("subprocess.Popen", return_value=_mock_server_proc),
+            patch("optimize_gguf._wait_for_server_ready", return_value=None),
             patch.object(
                 eval_perplexity_gguf,
                 "compute_perplexity",
@@ -164,6 +169,7 @@ def _run_optimize_with_mocks(
                 "--text-path", str(text_file),
                 "--llama-perplexity-bin", "fake-llama-perplexity",
                 "--llama-cli-bin", "fake-llama-cli",
+                "--llama-server-bin", "fake-llama-server",
                 "--tracking-uri", tracking_uri,
                 "--experiment-prefix", EXPERIMENT_PREFIX,
             ]
@@ -385,11 +391,10 @@ def test_manifest_lists_successful_trials(tmp_path: Path) -> None:
 
 
 def test_generate_closure_forwards_ngl_to_llama_cli(tmp_path: Path) -> None:
-    """_build_objective's inner generate() forwards n_gpu_layers to the real
-    llama-cli subprocess call as -ngl <n>, and omits it when n_gpu_layers=0.
-    Runs the actual objective (via compute_refusal_rate's real generate
-    callback, not a re-implementation) against a mocked subprocess.run and
-    a mocked compute_perplexity, capturing every subprocess call made."""
+    """_build_objective's refusal-rate scoring forwards n_gpu_layers to the
+    llama-server startup command as -ngl <n>, omits it when n_gpu_layers=0.
+    Adapted from the original llama-cli version: same invariant (ngl
+    forwarding), now exercised via the llama-server Popen call."""
     gguf_out_dir = tmp_path / "gguf-out"
     gguf_out_dir.mkdir()
     for q in VALID_QUANTS:
@@ -398,22 +403,23 @@ def test_generate_closure_forwards_ngl_to_llama_cli(tmp_path: Path) -> None:
     text_path.write_text("hello", encoding="utf-8")
     archive_root = tmp_path / "archive"
 
-    captured_cli_cmds: list[list[str]] = []
+    captured_server_cmds: list[list] = []
+
+    def fake_popen(cmd, *a, **kw):
+        captured_server_cmds.append(list(cmd))
+        proc = MagicMock()
+        proc.wait.return_value = 0
+        return proc
 
     def fake_run(cmd, *a, **kw):
-        if cmd[0] == "make":
-            return SimpleNamespace(returncode=0, stdout="", stderr="")
-        if cmd[0] == "fake-llama-cli":
-            captured_cli_cmds.append(cmd)
-            return SimpleNamespace(returncode=0, stdout="a response", stderr="")
-        raise AssertionError(f"Unexpected subprocess call: {cmd}")
-
-    def fake_compute_perplexity(*a, **kw):
-        return 5.0
+        return SimpleNamespace(returncode=0, stdout="", stderr="")
 
     with (
         patch.object(subprocess, "run", side_effect=fake_run),
-        patch.object(eval_perplexity_gguf, "compute_perplexity", fake_compute_perplexity),
+        patch.object(subprocess, "Popen", side_effect=fake_popen),
+        patch("optimize_gguf._wait_for_server_ready", return_value=None),
+        patch("optimize_gguf._http_completion", return_value="a response"),
+        patch.object(eval_perplexity_gguf, "compute_perplexity", return_value=5.0),
     ):
         for n_gpu_layers, expect_ngl in [(0, False), (7, True)]:
             objective = optimize_gguf._build_objective(
@@ -423,20 +429,21 @@ def test_generate_closure_forwards_ngl_to_llama_cli(tmp_path: Path) -> None:
                 text_path=str(text_path),
                 llama_perplexity_bin="fake-perplexity-bin",
                 llama_cli_bin="fake-llama-cli",
+                llama_server_bin="fake-llama-server",
                 repo_root=tmp_path,
                 n_gpu_layers=n_gpu_layers,
             )
             study = optuna.create_study(directions=["minimize", "minimize"])
             study.optimize(objective, n_trials=1, catch=(Exception,))
 
-            assert len(captured_cli_cmds) >= 1, "generate() never called llama-cli"
-            last_cmd = captured_cli_cmds[-1]
+            assert len(captured_server_cmds) >= 1, "llama-server was never started"
+            last_cmd = captured_server_cmds[-1]
             if expect_ngl:
                 assert "-ngl" in last_cmd, f"n_gpu_layers={n_gpu_layers} but -ngl missing: {last_cmd}"
                 assert last_cmd[last_cmd.index("-ngl") + 1] == str(n_gpu_layers)
             else:
                 assert "-ngl" not in last_cmd, f"n_gpu_layers=0 but -ngl present: {last_cmd}"
-            captured_cli_cmds.clear()
+            captured_server_cmds.clear()
 
 
 def test_optimize_gguf_ngl_arg_reaches_compute_perplexity(tmp_path: Path) -> None:
@@ -472,6 +479,9 @@ def test_optimize_gguf_ngl_arg_reaches_compute_perplexity(tmp_path: Path) -> Non
     text_path = tmp_path / "text.txt"
     text_path.write_text("hello", encoding="utf-8")
 
+    _mock_proc = MagicMock()
+    _mock_proc.wait.return_value = 0
+
     original_argv = sys.argv[:]
     original_tracking_uri = os.environ.get("MLFLOW_TRACKING_URI")
     try:
@@ -483,10 +493,13 @@ def test_optimize_gguf_ngl_arg_reaches_compute_perplexity(tmp_path: Path) -> Non
             "--text-path", str(text_path),
             "--tracking-uri", tracking_uri,
             "--experiment-prefix", EXPERIMENT_PREFIX,
+            "--llama-server-bin", "fake-llama-server",
             "--n-gpu-layers", "42",
         ]
         with (
             patch("subprocess.run", side_effect=subprocess_side_effect),
+            patch("subprocess.Popen", return_value=_mock_proc),
+            patch("optimize_gguf._wait_for_server_ready", return_value=None),
             patch.object(eval_perplexity_gguf, "compute_perplexity", fake_compute_perplexity),
             patch.object(eval_refusal_rate, "compute_refusal_rate", fake_compute_refusal_rate),
         ):
@@ -541,6 +554,9 @@ def test_extra_manifest_field_merged_into_manifest_entry(tmp_path: Path) -> None
         out_path.write_bytes(b"placeholder")
         return SimpleNamespace(returncode=0, stdout="", stderr="")
 
+    _mock_proc2 = MagicMock()
+    _mock_proc2.wait.return_value = 0
+
     original_argv = sys.argv[:]
     original_tracking_uri = os.environ.get("MLFLOW_TRACKING_URI")
     try:
@@ -552,11 +568,14 @@ def test_extra_manifest_field_merged_into_manifest_entry(tmp_path: Path) -> None
             "--text-path", str(text_file),
             "--tracking-uri", tracking_uri,
             "--experiment-prefix", EXPERIMENT_PREFIX,
+            "--llama-server-bin", "fake-llama-server",
             "--extra-manifest-field", "run_id=456",
             "--extra-manifest-field", "flow_name=WellspringFlow",
         ]
         with (
             patch("subprocess.run", side_effect=subprocess_side_effect),
+            patch("subprocess.Popen", return_value=_mock_proc2),
+            patch("optimize_gguf._wait_for_server_ready", return_value=None),
             patch.object(eval_perplexity_gguf, "compute_perplexity", lambda *a, **kw: 5.0),
             patch.object(eval_refusal_rate, "compute_refusal_rate", lambda *a, **kw: 0.5),
         ):
@@ -615,3 +634,242 @@ def test_quantize_gguf_call_passes_gguf_out_dir_and_f16_path(tmp_path: Path) -> 
         f"whatever GGUF_F16_GGUF the Makefile's own defaults resolve to, not "
         f"the real F16 file this search is scoring. Full call: {quantize_calls[0]}"
     )
+
+
+# ---------------------------------------------------------------------------
+# Finding A — single model load per trial (PR review finding, lines 284/290)
+# ---------------------------------------------------------------------------
+
+
+def test_refusal_scoring_uses_single_server_start_per_trial(tmp_path: Path) -> None:
+    """Finding A: for N_REFUSAL_PROMPTS=10, llama-server is started exactly ONCE per trial (not 10)."""
+    gguf_out_dir = tmp_path / "gguf-out"
+    gguf_out_dir.mkdir()
+    for q in VALID_QUANTS:
+        (gguf_out_dir / f"model-{q}.gguf").write_bytes(b"placeholder")
+    text_path = tmp_path / "text.txt"
+    text_path.write_text("hello", encoding="utf-8")
+    archive_root = tmp_path / "archive"
+
+    popen_calls: list[list] = []
+
+    def fake_popen(cmd, *a, **kw):
+        popen_calls.append(list(cmd))
+        proc = MagicMock()
+        proc.wait.return_value = 0
+        return proc
+
+    with (
+        patch.object(subprocess, "run", return_value=SimpleNamespace(returncode=0, stdout="", stderr="")),
+        patch.object(subprocess, "Popen", side_effect=fake_popen),
+        patch("optimize_gguf._wait_for_server_ready", return_value=None),
+        patch("optimize_gguf._http_completion", return_value="Sure, here's how."),
+        patch.object(eval_perplexity_gguf, "compute_perplexity", return_value=5.0),
+    ):
+        objective = optimize_gguf._build_objective(
+            gguf_out_dir=str(gguf_out_dir),
+            gguf_f16=str(gguf_out_dir / "model-f16.gguf"),
+            archive_root=archive_root,
+            text_path=str(text_path),
+            llama_perplexity_bin="fake-perplexity-bin",
+            llama_cli_bin="fake-llama-cli",
+            llama_server_bin="fake-llama-server",
+            repo_root=tmp_path,
+            n_gpu_layers=0,
+        )
+        study = optuna.create_study(directions=["minimize", "minimize"])
+        study.optimize(objective, n_trials=1, catch=(Exception,))
+
+    server_starts = [c for c in popen_calls if len(c) > 0 and "fake-llama-server" in str(c[0])]
+    assert len(server_starts) == 1, (
+        f"Expected llama-server started exactly 1 time per trial, "
+        f"got {len(server_starts)}: {popen_calls}"
+    )
+
+
+def test_refusal_responses_split_and_classified_per_prompt(tmp_path: Path) -> None:
+    """Finding A(b): each of N_REFUSAL_PROMPTS prompts gets its own HTTP completion call."""
+    gguf_out_dir = tmp_path / "gguf-out"
+    gguf_out_dir.mkdir()
+    for q in VALID_QUANTS:
+        (gguf_out_dir / f"model-{q}.gguf").write_bytes(b"placeholder")
+    text_path = tmp_path / "text.txt"
+    text_path.write_text("hello", encoding="utf-8")
+    archive_root = tmp_path / "archive"
+
+    http_call_counter = [0]
+
+    def counting_http_completion(port, prompt, n_predict=100):
+        http_call_counter[0] += 1
+        return f"Response {http_call_counter[0]}: complied."
+
+    mock_proc = MagicMock()
+    mock_proc.wait.return_value = 0
+
+    with (
+        patch.object(subprocess, "run", return_value=SimpleNamespace(returncode=0, stdout="", stderr="")),
+        patch.object(subprocess, "Popen", return_value=mock_proc),
+        patch("optimize_gguf._wait_for_server_ready", return_value=None),
+        patch("optimize_gguf._http_completion", side_effect=counting_http_completion),
+        patch.object(eval_perplexity_gguf, "compute_perplexity", return_value=5.0),
+    ):
+        objective = optimize_gguf._build_objective(
+            gguf_out_dir=str(gguf_out_dir),
+            gguf_f16=str(gguf_out_dir / "model-f16.gguf"),
+            archive_root=archive_root,
+            text_path=str(text_path),
+            llama_perplexity_bin="fake-perplexity-bin",
+            llama_cli_bin="fake-llama-cli",
+            llama_server_bin="fake-llama-server",
+            repo_root=tmp_path,
+            n_gpu_layers=0,
+        )
+        study = optuna.create_study(directions=["minimize", "minimize"])
+        study.optimize(objective, n_trials=1, catch=(Exception,))
+
+    assert len(study.trials) == 1 and study.trials[0].state.name == "COMPLETE"
+    perplexity, refusal_rate = study.trials[0].values
+    assert 0.0 <= refusal_rate <= 1.0, f"refusal_rate {refusal_rate} not in [0, 1]"
+    assert http_call_counter[0] == optimize_gguf.N_REFUSAL_PROMPTS, (
+        f"Expected {optimize_gguf.N_REFUSAL_PROMPTS} HTTP calls, got {http_call_counter[0]}"
+    )
+
+
+# ---------------------------------------------------------------------------
+# Finding B — provenance at artifact creation (PR review finding, line 312)
+# ---------------------------------------------------------------------------
+
+
+def test_provenance_written_at_artifact_creation_survives_scoring_failure(tmp_path: Path) -> None:
+    """Finding B(a): trial-N.provenance.json exists for the archived GGUF even if scoring fails."""
+    gguf_out_dir = tmp_path / "gguf-out"
+    gguf_out_dir.mkdir()
+    for q in VALID_QUANTS:
+        (gguf_out_dir / f"model-{q}.gguf").write_bytes(b"placeholder")
+    text_path = tmp_path / "text.txt"
+    text_path.write_text("hello", encoding="utf-8")
+    archive_root = tmp_path / "archive"
+
+    mock_proc = MagicMock()
+    mock_proc.wait.return_value = 0
+
+    with (
+        patch.object(subprocess, "run", return_value=SimpleNamespace(returncode=0, stdout="", stderr="")),
+        patch.object(subprocess, "Popen", return_value=mock_proc),
+        patch("optimize_gguf._wait_for_server_ready", return_value=None),
+        patch.object(
+            eval_perplexity_gguf,
+            "compute_perplexity",
+            side_effect=RuntimeError("simulated perplexity failure"),
+        ),
+    ):
+        objective = optimize_gguf._build_objective(
+            gguf_out_dir=str(gguf_out_dir),
+            gguf_f16=str(gguf_out_dir / "model-f16.gguf"),
+            archive_root=archive_root,
+            text_path=str(text_path),
+            llama_perplexity_bin="fake-perplexity-bin",
+            llama_cli_bin="fake-llama-cli",
+            llama_server_bin="fake-llama-server",
+            repo_root=tmp_path,
+            n_gpu_layers=0,
+        )
+        study = optuna.create_study(directions=["minimize", "minimize"])
+        study.optimize(objective, n_trials=1, catch=(Exception,))
+
+    from optuna.trial import TrialState
+    assert study.trials[0].state == TrialState.FAIL
+
+    sidecar_files = list(archive_root.glob("trial-*.provenance.json"))
+    assert len(sidecar_files) >= 1, (
+        f"Expected >=1 provenance sidecar after failed trial, found none in {archive_root}"
+    )
+
+
+def test_provenance_contains_wellspring_fields(tmp_path: Path) -> None:
+    """Finding B(b): provenance sidecar records wellspring_commit and wellspring_dirty."""
+    gguf_out_dir = tmp_path / "gguf-out"
+    gguf_out_dir.mkdir()
+    for q in VALID_QUANTS:
+        (gguf_out_dir / f"model-{q}.gguf").write_bytes(b"placeholder")
+    text_path = tmp_path / "text.txt"
+    text_path.write_text("hello", encoding="utf-8")
+    archive_root = tmp_path / "archive"
+
+    mock_proc = MagicMock()
+    mock_proc.wait.return_value = 0
+
+    with (
+        patch.object(subprocess, "run", return_value=SimpleNamespace(returncode=0, stdout="", stderr="")),
+        patch.object(subprocess, "Popen", return_value=mock_proc),
+        patch("optimize_gguf._wait_for_server_ready", return_value=None),
+        patch("optimize_gguf._http_completion", return_value="a response"),
+        patch.object(eval_perplexity_gguf, "compute_perplexity", return_value=5.0),
+    ):
+        objective = optimize_gguf._build_objective(
+            gguf_out_dir=str(gguf_out_dir),
+            gguf_f16=str(gguf_out_dir / "model-f16.gguf"),
+            archive_root=archive_root,
+            text_path=str(text_path),
+            llama_perplexity_bin="fake-perplexity-bin",
+            llama_cli_bin="fake-llama-cli",
+            llama_server_bin="fake-llama-server",
+            repo_root=tmp_path,
+            n_gpu_layers=0,
+        )
+        study = optuna.create_study(directions=["minimize", "minimize"])
+        study.optimize(objective, n_trials=1, catch=(Exception,))
+
+    sidecar_files = list(archive_root.glob("trial-*.provenance.json"))
+    assert len(sidecar_files) == 1, f"Expected 1 sidecar, found {len(sidecar_files)}"
+    record = json.loads(sidecar_files[0].read_text(encoding="utf-8"))
+    assert "wellspring_commit" in record, "provenance sidecar missing 'wellspring_commit'"
+    assert "wellspring_dirty" in record, "provenance sidecar missing 'wellspring_dirty'"
+
+
+def test_provenance_updated_with_scores_not_duplicated(tmp_path: Path) -> None:
+    """Finding B(c): after scoring, the SAME sidecar is updated (one file, both fields)."""
+    gguf_out_dir = tmp_path / "gguf-out"
+    gguf_out_dir.mkdir()
+    for q in VALID_QUANTS:
+        (gguf_out_dir / f"model-{q}.gguf").write_bytes(b"placeholder")
+    text_path = tmp_path / "text.txt"
+    text_path.write_text("hello", encoding="utf-8")
+    archive_root = tmp_path / "archive"
+
+    mock_proc = MagicMock()
+    mock_proc.wait.return_value = 0
+
+    with (
+        patch.object(subprocess, "run", return_value=SimpleNamespace(returncode=0, stdout="", stderr="")),
+        patch.object(subprocess, "Popen", return_value=mock_proc),
+        patch("optimize_gguf._wait_for_server_ready", return_value=None),
+        patch("optimize_gguf._http_completion", return_value="a response"),
+        patch.object(eval_perplexity_gguf, "compute_perplexity", return_value=7.5),
+        patch.object(eval_refusal_rate, "compute_refusal_rate", return_value=0.2),
+    ):
+        objective = optimize_gguf._build_objective(
+            gguf_out_dir=str(gguf_out_dir),
+            gguf_f16=str(gguf_out_dir / "model-f16.gguf"),
+            archive_root=archive_root,
+            text_path=str(text_path),
+            llama_perplexity_bin="fake-perplexity-bin",
+            llama_cli_bin="fake-llama-cli",
+            llama_server_bin="fake-llama-server",
+            repo_root=tmp_path,
+            n_gpu_layers=0,
+        )
+        study = optuna.create_study(directions=["minimize", "minimize"])
+        study.optimize(objective, n_trials=1, catch=(Exception,))
+
+    sidecar_files = list(archive_root.glob("trial-*.provenance.json"))
+    assert len(sidecar_files) == 1, (
+        f"Expected exactly 1 provenance sidecar (not duplicated), found {len(sidecar_files)}"
+    )
+    record = json.loads(sidecar_files[0].read_text(encoding="utf-8"))
+    assert "wellspring_commit" in record, "updated sidecar missing 'wellspring_commit'"
+    assert "wellspring_dirty" in record, "updated sidecar missing 'wellspring_dirty'"
+    assert "perplexity" in record, "updated sidecar missing 'perplexity'"
+    assert "refusal_rate" in record, "updated sidecar missing 'refusal_rate'"
+    assert record["perplexity"] == 7.5
+    assert record["refusal_rate"] == 0.2

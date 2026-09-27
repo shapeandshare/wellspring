@@ -82,19 +82,6 @@ def test_derive_mlx_out_dir_and_gguf_out_dir_are_siblings_not_nested() -> None:
 
 
 # ---------------------------------------------------------------------------
-# T007: max-workers topology switch
-# ---------------------------------------------------------------------------
-
-
-def test_max_workers_from_optimize_parallel_false_is_sequential() -> None:
-    assert flow._max_workers_for_topology(False) == 1
-
-
-def test_max_workers_from_optimize_parallel_true_is_metaflow_default() -> None:
-    assert flow._max_workers_for_topology(True) == 16
-
-
-# ---------------------------------------------------------------------------
 # T008: run provenance fields (FR-008/SC-004)
 # ---------------------------------------------------------------------------
 
@@ -171,6 +158,7 @@ def _make_flow(**overrides):
         "llama_perplexity_bin", "ik_llama.cpp/build/bin/llama-perplexity"
     )
     f.llama_cli_bin = overrides.get("llama_cli_bin", "ik_llama.cpp/build/bin/llama-cli")
+    f.llama_server_bin = overrides.get("llama_server_bin", "ik_llama.cpp/build/bin/llama-server")
     f.n_gpu_layers = overrides.get("n_gpu_layers", 0)
     f.batch_size = overrides.get("batch_size", 0)
     return f
@@ -346,6 +334,42 @@ def test_log_to_mlflow_step_calls_existing_main(monkeypatch: pytest.MonkeyPatch)
     assert captured_argv[idx_uri + 1] == f.mlflow_tracking_uri
 
 
+def test_log_to_mlflow_step_raises_on_nonzero_return(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Regression: log_heretic_to_mlflow.main() returns 1 (not an exception)
+    when the journal is missing/unreadable. Discarding that return value let
+    this step fan out to mlx_search/gguf_search on top of unlogged results
+    (Copilot PR review, flow.py:339) -- lock in the fail-fast fix.
+    """
+    from unittest.mock import MagicMock
+
+    import log_heretic_to_mlflow
+
+    f = _make_flow()
+    monkeypatch.setattr(log_heretic_to_mlflow, "main", lambda: 1)
+    mock_next = MagicMock()
+    monkeypatch.setattr(f, "next", mock_next)
+
+    with pytest.raises(RuntimeError, match="log_heretic_to_mlflow"):
+        f.log_to_mlflow()
+
+    mock_next.assert_not_called()
+
+
+def test_log_to_mlflow_step_proceeds_on_zero_return(monkeypatch: pytest.MonkeyPatch) -> None:
+    from unittest.mock import MagicMock
+
+    import log_heretic_to_mlflow
+
+    f = _make_flow()
+    monkeypatch.setattr(log_heretic_to_mlflow, "main", lambda: 0)
+    mock_next = MagicMock()
+    monkeypatch.setattr(f, "next", mock_next)
+
+    f.log_to_mlflow()
+
+    mock_next.assert_called_once()
+
+
 def test_decensor_then_log_to_mlflow_both_appear_in_only_step_selection() -> None:
     f = _make_flow(only_step="decensor,log_to_mlflow")
     requested = f._requested_steps()
@@ -409,6 +433,58 @@ def test_mlx_search_step_calls_run_study_with_flow_params(monkeypatch: pytest.Mo
     assert kwargs["mlx_out_dir"] == flow._derive_mlx_out_dir(f.resolved_hf_path)
 
 
+def test_mlx_search_step_resolves_tracking_uri_from_environment_when_param_empty(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Regression: mlx_search runs in its own Metaflow step process, so an
+    empty --mlflow_tracking_uri Parameter (the documented direct-invocation
+    pattern of exporting MLFLOW_TRACKING_URI and never passing the flag)
+    must resolve from the inherited environment, not pass "" straight into
+    run_study() -> mlflow.set_tracking_uri("") (Copilot PR review,
+    flow.py:365).
+    """
+    import os
+    from unittest.mock import MagicMock
+
+    import optimize_mlx
+
+    f = _make_flow(mlflow_tracking_uri="")
+    f.n_trials_mlx = 2
+    monkeypatch.setenv("MLFLOW_TRACKING_URI", "sqlite:///env-provided.db")
+
+    monkeypatch.setattr(flow, "_require_apple_silicon", lambda: None)
+    mock_run_study = MagicMock()
+    monkeypatch.setattr(optimize_mlx, "run_study", mock_run_study)
+    monkeypatch.setattr(f, "next", MagicMock())
+
+    f.mlx_search()
+
+    _, kwargs = mock_run_study.call_args
+    assert kwargs["tracking_uri"] == "sqlite:///env-provided.db"
+
+
+def test_mlx_search_step_fails_fast_when_no_tracking_uri_anywhere(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from unittest.mock import MagicMock
+
+    import optimize_mlx
+
+    f = _make_flow(mlflow_tracking_uri="")
+    f.n_trials_mlx = 2
+    monkeypatch.delenv("MLFLOW_TRACKING_URI", raising=False)
+
+    monkeypatch.setattr(flow, "_require_apple_silicon", lambda: None)
+    mock_run_study = MagicMock()
+    monkeypatch.setattr(optimize_mlx, "run_study", mock_run_study)
+    monkeypatch.setattr(f, "next", MagicMock())
+
+    with pytest.raises(SystemExit):
+        f.mlx_search()
+
+    mock_run_study.assert_not_called()
+
+
 def test_gguf_search_step_calls_main_with_flow_params(monkeypatch: pytest.MonkeyPatch) -> None:
     from unittest.mock import MagicMock
 
@@ -436,6 +512,7 @@ def test_gguf_search_step_calls_main_with_flow_params(monkeypatch: pytest.Monkey
     assert captured_argv[idx_f16 + 1] == f"{gguf_out_dir}/model-f16.gguf"
     assert "--llama-perplexity-bin" in captured_argv
     assert "--llama-cli-bin" in captured_argv
+    assert "--llama-server-bin" in captured_argv
 
 
 def test_gguf_search_step_passes_n_gpu_layers_when_nonzero(monkeypatch: pytest.MonkeyPatch) -> None:

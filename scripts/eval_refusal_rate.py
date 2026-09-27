@@ -20,6 +20,14 @@ uses split="test[:100]" — the ":100" slice notation is HuggingFace datasets
 syntax that the /first-rows API does not accept; we pass the bare split name
 "test" and use n_prompts to control the count).
 
+Revision pinning: compute_refusal_rate() accepts an optional ``revision``
+parameter that is forwarded to the /first-rows API query.  The default is
+DEFAULT_REVISION — the exact commit of mlabonne/harmful_behaviors documented
+in PROVENANCE.md lines 57-59 — so scores are stable across Hub updates.
+Pass an explicit SHA to override the pin (e.g. for a future dataset update),
+or pass None to accept the default.  This mirrors the pattern in
+scripts/fetch_calibration_text.py and scripts/fetch_calibration_data.py.
+
 Design choice: compute_refusal_rate() validates n_prompts > 0 before any
 network call, per Article VIII's validate-at-the-boundary principle —
 a caller passing an invalid argument discovers the error immediately, without
@@ -42,6 +50,11 @@ DEFAULT_DATASET = "mlabonne/harmful_behaviors"
 DEFAULT_CONFIG = "default"
 DEFAULT_SPLIT = "test"
 DEFAULT_COLUMN = "text"
+# Pinned commit for mlabonne/harmful_behaviors — documented in PROVENANCE.md lines 57-59.
+# Forwarded to the /first-rows query so evaluation scores are reproducible across
+# Hub updates.  Mirrors the CALIB_REVISION / CALIB_TEXT_REVISION pattern already
+# used by fetch_calibration_data.py and fetch_calibration_text.py.
+DEFAULT_REVISION = "01cead01398926d81f7c52bdb790ee8cf77ebba7"
 
 # Refusal markers copied verbatim from vendor/heretic/src/heretic/config.py's
 # Settings.refusal_markers field default. Do NOT import from vendor/heretic —
@@ -125,6 +138,7 @@ def is_refusal(response: str) -> bool:
 def compute_refusal_rate(
     generate: Callable[[str], str],
     n_prompts: int = 100,
+    revision: str | None = None,
 ) -> float:
     """Measure the fraction of harmful prompts that elicit a refusal.
 
@@ -137,6 +151,10 @@ def compute_refusal_rate(
             response string. This is the model-under-test's generation
             function.
         n_prompts: Number of prompts to evaluate. Must be > 0.
+        revision: Exact Hub commit SHA to pin the dataset fetch to.  Defaults
+            to DEFAULT_REVISION (the commit documented in PROVENANCE.md lines
+            57-59) when None or omitted, so evaluation scores are reproducible
+            across Hub updates.  Pass an explicit SHA to override the pin.
 
     Returns:
         A float in [0.0, 1.0] — the fraction of evaluated prompts that
@@ -149,11 +167,15 @@ def compute_refusal_rate(
     if n_prompts <= 0:
         raise ValueError(f"n_prompts must be a positive integer, got {n_prompts!r}")
 
+    effective_revision = revision if revision is not None else DEFAULT_REVISION
+
     query_params = {
         "dataset": DEFAULT_DATASET,
         "config": DEFAULT_CONFIG,
         "split": DEFAULT_SPLIT,
     }
+    if effective_revision:
+        query_params["revision"] = effective_revision
     query = urllib.parse.urlencode(query_params)
     url = f"{FIRST_ROWS_URL}?{query}"
 
