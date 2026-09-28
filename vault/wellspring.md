@@ -5,7 +5,7 @@ tags:
   - type/moc
   - domain/governance
 created: 2026-09-26
-updated: 2026-09-27
+updated: 2026-09-28
 ---
 
 # Wellspring Vault
@@ -46,6 +46,7 @@ Session-level decisions with context and consequences.
 - `[[2026-09-27-no-joint-mlx-gguf-search]]`
 - `[[2026-09-27-roadmap-reduced-to-spec-index]]`
 - `[[2026-09-27-finetune-shell-scripts-ported-to-wellspring]]`
+- `[[2026-09-28-hermetic-guard-scope-mlx-blocked-torch-cpu-allowed]]`
 
 ### Discoveries
 
@@ -72,6 +73,7 @@ Non-obvious constraints, gaps, and conflicts that cost discovery time.
 - `[[2026-09-27-dry-run-verification-is-not-verification]]`
 - `[[2026-09-27-heretic-1-4-0-has-no-scorer-plugin-api]]`
 - `[[2026-09-27-nltk-and-sqlitedict-alerts-are-unreachable]]`
+- `[[2026-09-28-make-test-was-silently-network-dependent]]`
 
 ### Sessions
 
@@ -96,6 +98,7 @@ Append-only session activity logs, never pruned.
 - `[[2026-09-26-hackathon-hardening]]`
 - `[[2026-09-27-per-team-docs]]`
 - `[[2026-09-27-retire-finetuning-vault]]`
+- `[[2026-09-28-test-suite-backfill-004]]`
 
 ### References
 
