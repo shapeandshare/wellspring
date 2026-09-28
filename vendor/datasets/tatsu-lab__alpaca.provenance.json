@@ -1,0 +1,30 @@
+{
+  "files": [
+    {
+      "bytes": 2318,
+      "path": ".gitattributes",
+      "sha256": "57b92929725b32052dcf2edef63440874fa04b6ea73a2e0af4c66d742ec9e6f2"
+    },
+    {
+      "bytes": 7472,
+      "path": "README.md",
+      "sha256": "dc8a8ca43cce3671167721372bbd8b345b24eba1af5954915161fffed2f21b5c"
+    },
+    {
+      "bytes": 24246638,
+      "path": "data/train-00000-of-00001-a09b74b3ef9c3b56.parquet",
+      "sha256": "06391b656a06fd3fb9d213160ef2398796c3b7f3dc75ef1e3ced30d461517073"
+    }
+  ],
+  "license": "CC-BY-NC-4.0 (NonCommercial)",
+  "note": "Snapshot bytes are git-ignored and never redistributed; this manifest is the tracked chain-of-custody record. See PROVENANCE.md.",
+  "repo_id": "tatsu-lab/alpaca",
+  "repo_type": "dataset",
+  "retrieved_at_utc": "2026-09-27T23:15:07.324128+00:00",
+  "revision": "dce01c9b08f87459cf36a430d809084718273017",
+  "source_url": "https://huggingface.co/datasets/tatsu-lab/alpaca/tree/dce01c9b08f87459cf36a430d809084718273017",
+  "step": "vendor-snapshot",
+  "total_bytes": 24256428,
+  "wellspring_commit": "78ff5d52f424d7373e51cf6e97d8a83ab5888af5",
+  "wellspring_dirty": true
+}

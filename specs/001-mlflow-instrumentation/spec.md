@@ -4,7 +4,7 @@
 
 **Created**: 2026-09-25
 
-**Status**: Draft
+**Status**: Implemented. Based on all tasks being checked in `tasks.md`; the acceptance checks were not re-run on 2026-09-27.
 
 **Input**: User description: "mlflow conversion" — make the pipeline's existing
 abliteration search visible in MLflow, and add automated search over MLX/GGUF
@@ -306,4 +306,4 @@ quality and decensoring scores on the actual compressed output file.
   search spanning both formats at once is out of scope.
 - This feature does not change which physical machine or hardware any step
   runs on — that is a separate, unrelated pipeline concern (see the
-  "Hardware-aware export dispatch" track in `ROADMAP.md`).
+  export dispatch in `specs/013-export-dispatch`).

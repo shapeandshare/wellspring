@@ -5,7 +5,7 @@ tags:
   - type/reference
   - domain/governance
 created: 2026-09-26
-updated: 2026-09-26
+updated: 2026-09-27
 ---
 
 # Tag Vocabulary
@@ -47,7 +47,8 @@ stable).
 | `domain/abliteration` | Heretic invocation, decensoring, KL divergence, refusal scoring |
 | `domain/mlx` | MLX conversion, quantization search, Apple-Silicon-only concerns |
 | `domain/gguf` | GGUF conversion, imatrix, quantization search, ik_llama.cpp |
-| `domain/orchestration` | Metaflow flow.py, Makefile-as-interface, entry points, resumability |
+| `domain/orchestration` | Metaflow src/flow.py, Makefile-as-interface, entry points, resumability |
 | `domain/provenance` | Chain of custody, manifests, pinning, license tracking |
 | `domain/tooling` | Dev tooling, CI, spec-kit, skills, vault infrastructure |
+| `domain/finetuning` | Spot the Sleeper: src/finetune/, Red/Blue lineup, weight_diff MRI, probe, handover secrecy |
 </content>

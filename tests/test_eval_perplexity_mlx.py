@@ -1,4 +1,4 @@
-"""Tests for scripts/eval_perplexity_mlx.py.
+"""Tests for src/scripts/eval_perplexity_mlx.py.
 
 Real-fixture correction (2026-09-25): the original version of this test
 suite mocked ``mlx_lm.utils.load`` based on a feasibility spike that was
@@ -21,7 +21,12 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from eval_perplexity_mlx import (
+# These tests run real MLX array code, which exists only on Apple Silicon.
+# On other hosts (the Linux CI runner) the whole module is skipped (Article IX Rule 5).
+pytest.importorskip("mlx.core")
+pytest.importorskip("mlx_vlm")
+
+from eval_perplexity_mlx import (  # noqa: E402 - after importorskip
     MlxPerplexityUnsupportedError,
     _tokenize_and_window,
     compute_perplexity,

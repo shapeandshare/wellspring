@@ -4,7 +4,7 @@
 
 **Created**: 2026-09-26
 
-**Status**: Draft
+**Status**: Implemented. Based on all tasks being checked in `tasks.md`; the acceptance checks were not re-run on 2026-09-27.
 
 **Input**: User description: "we need to run this fully in metaflow
 regardless what libraries we use - we are free to do whatever we need"

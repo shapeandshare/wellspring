@@ -1,4 +1,4 @@
-"""Tests for scripts/eval_perplexity_gguf.py's compute_perplexity() function.
+"""Tests for src/scripts/eval_perplexity_gguf.py's compute_perplexity() function.
 
 TDD (T019): these tests were written BEFORE the implementation (RED), then
 the implementation was written to make them pass (GREEN).

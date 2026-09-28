@@ -1,0 +1,79 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 232">
+  <defs>
+    <linearGradient id="mbg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#0f172a"/>
+      <stop offset="100%" style="stop-color:#1e293b"/>
+    </linearGradient>
+  </defs>
+  <style>
+    @keyframes mb { 0%,100% { opacity:0.75; } 50% { opacity:1; } }
+    @keyframes mg { 0%,100% { opacity:0.8; } 50% { opacity:1; } }
+    @keyframes ma { 0%,40% { opacity:0.2; } 50%,90% { opacity:1; } 100% { opacity:0.2; } }
+    .mb { animation: mb 3s ease-in-out infinite; }
+    .mg { animation: mg 2.5s ease-in-out infinite 0.2s; }
+    .a1 { animation: ma 2s ease-in-out infinite; }
+    .a2 { animation: ma 2s ease-in-out infinite 0.3s; }
+    .a3 { animation: ma 2s ease-in-out infinite 0.6s; }
+    .a4 { animation: ma 2s ease-in-out infinite 0.9s; }
+    .wire { fill: none; stroke: #475569; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+  </style>
+  <rect width="900" height="232" fill="url(#mbg)" rx="12"/>
+  <text x="450" y="22" text-anchor="middle" font-family="system-ui,sans-serif" font-size="12" font-weight="700" fill="#94a3b8" letter-spacing="2">METAFLOW ORCHESTRATION</text>
+  <rect class="mb" x="24" y="44" width="60" height="36" rx="6" fill="#1e3a5f" stroke="#4285f4" stroke-width="1.5"/>
+  <text x="54.0" y="61.0" text-anchor="middle" font-family="system-ui,sans-serif" font-size="10" font-weight="700" fill="#93c5fd">start</text>
+  <text x="54.0" y="72.0" text-anchor="middle" font-family="system-ui,sans-serif" font-size="7" fill="#60a5fa">params</text>
+  <path class="wire" d="M84,62.0 H106"/>
+  <polygon class="a1" points="106,56.0 118,62.0 106,68.0" fill="#ea4335"/>
+  <rect class="mg" x="118" y="44" width="104" height="36" rx="18.0" fill="#450a0a" stroke="#ea4335" stroke-width="1.5" stroke-dasharray="4 3"/>
+  <text x="170.0" y="61.0" text-anchor="middle" font-family="system-ui,sans-serif" font-size="10" font-weight="700" fill="#fca5a5">finetune_pre</text>
+  <text x="170.0" y="72.0" text-anchor="middle" font-family="system-ui,sans-serif" font-size="7" fill="#f87171">optional</text>
+  <path class="wire" d="M222,62.0 H244"/>
+  <polygon class="a2" points="244,56.0 256,62.0 244,68.0" fill="#f9ab00"/>
+  <rect class="mg" x="256" y="44" width="84" height="36" rx="18.0" fill="#422006" stroke="#f9ab00" stroke-width="1.5"/>
+  <text x="298.0" y="66.0" text-anchor="middle" font-family="system-ui,sans-serif" font-size="10" font-weight="700" fill="#fcd34d">decensor</text>
+  <path class="wire" d="M340,62.0 H362"/>
+  <polygon class="a3" points="362,56.0 374,62.0 362,68.0" fill="#f9ab00"/>
+  <rect class="mg" x="374" y="44" width="108" height="36" rx="18.0" fill="#422006" stroke="#f9ab00" stroke-width="1.5"/>
+  <text x="428.0" y="66.0" text-anchor="middle" font-family="system-ui,sans-serif" font-size="10" font-weight="700" fill="#fcd34d">log_to_mlflow</text>
+  <path class="wire" d="M482,62.0 H504"/>
+  <polygon class="a4" points="504,56.0 516,62.0 504,68.0" fill="#ea4335"/>
+  <rect class="mg" x="516" y="44" width="110" height="36" rx="18.0" fill="#450a0a" stroke="#ea4335" stroke-width="1.5" stroke-dasharray="4 3"/>
+  <text x="571.0" y="61.0" text-anchor="middle" font-family="system-ui,sans-serif" font-size="10" font-weight="700" fill="#fca5a5">finetune_post</text>
+  <text x="571.0" y="72.0" text-anchor="middle" font-family="system-ui,sans-serif" font-size="7" fill="#f87171">optional</text>
+  <path class="wire" d="M626,62.0 H648"/>
+  <polygon class="a1" points="648,56.0 660,62.0 648,68.0" fill="#ea4335"/>
+  <rect class="mg" x="660" y="44" width="76" height="36" rx="18.0" fill="#450a0a" stroke="#ea4335" stroke-width="1.5" stroke-dasharray="4 3"/>
+  <text x="698.0" y="61.0" text-anchor="middle" font-family="system-ui,sans-serif" font-size="10" font-weight="700" fill="#fca5a5">ft_gate</text>
+  <text x="698.0" y="72.0" text-anchor="middle" font-family="system-ui,sans-serif" font-size="7" fill="#f87171">optional</text>
+  <path class="wire" d="M736,62.0 H792 C804,62.0 804,74.0 804,86.0 V152 C804,164 798,164 790,164 H780"/>
+  <path class="wire" d="M804,116 C804,128 798,128 790,128 H780"/>
+  <polygon class="a3" points="780,122 768,128 780,134" fill="#34a853"/>
+  <polygon class="a3" points="780,158 768,164 780,170" fill="#34a853"/>
+  <rect x="596" y="100" width="196" height="84" rx="8" fill="rgba(52,168,83,0.08)" stroke="#34a853" stroke-width="1" stroke-dasharray="5 3"/>
+  <text x="694" y="112" text-anchor="middle" font-family="system-ui,sans-serif" font-size="7" fill="#4ade80" letter-spacing="1">PARALLEL FAN-OUT · PER VARIANT</text>
+  <rect class="mg" x="664" y="115" width="104" height="26" rx="6" fill="#052e16" stroke="#34a853" stroke-width="1.5"/>
+  <text x="716.0" y="127.0" text-anchor="middle" font-family="system-ui,sans-serif" font-size="10" font-weight="700" fill="#86efac">mlx_search</text>
+  <text x="716.0" y="138.0" text-anchor="middle" font-family="system-ui,sans-serif" font-size="7" fill="#4ade80">⚠ Apple Silicon</text>
+  <rect class="mg" x="664" y="151" width="104" height="26" rx="6" fill="#052e16" stroke="#34a853" stroke-width="1.5"/>
+  <text x="716.0" y="163.0" text-anchor="middle" font-family="system-ui,sans-serif" font-size="10" font-weight="700" fill="#86efac">gguf_search</text>
+  <text x="716.0" y="174.0" text-anchor="middle" font-family="system-ui,sans-serif" font-size="7" fill="#4ade80">CPU or CUDA</text>
+  <path class="wire" d="M664,128 H630 C618,128 618,146.0 606,146.0 H588"/>
+  <path class="wire" d="M664,164 H630 C618,164 618,146.0 606,146.0"/>
+  <polygon class="a4" points="588,140.0 576,146.0 588,152.0" fill="#f9ab00"/>
+  <rect class="mg" x="522" y="128.0" width="54" height="36" rx="18.0" fill="#422006" stroke="#f9ab00" stroke-width="1.5"/>
+  <text x="549.0" y="150.0" text-anchor="middle" font-family="system-ui,sans-serif" font-size="10" font-weight="700" fill="#fcd34d">join</text>
+  <path class="wire" d="M522,146.0 H502"/>
+  <polygon class="a1" points="502,140.0 490,146.0 502,152.0" fill="#ea4335"/>
+  <rect class="mg" x="380" y="128.0" width="110" height="36" rx="18.0" fill="#450a0a" stroke="#ea4335" stroke-width="1.5" stroke-dasharray="4 3"/>
+  <text x="435.0" y="145.0" text-anchor="middle" font-family="system-ui,sans-serif" font-size="10" font-weight="700" fill="#fca5a5">ft_audit</text>
+  <text x="435.0" y="156.0" text-anchor="middle" font-family="system-ui,sans-serif" font-size="7" fill="#f87171">optional · Blue only</text>
+  <path class="wire" d="M380,146.0 H362"/>
+  <polygon class="a2" points="362,140.0 350,146.0 362,152.0" fill="#4285f4"/>
+  <rect class="mb" x="306" y="128.0" width="44" height="36" rx="6" fill="#1e3a5f" stroke="#4285f4" stroke-width="1.5"/>
+  <text x="328.0" y="150.0" text-anchor="middle" font-family="system-ui,sans-serif" font-size="10" font-weight="700" fill="#93c5fd">end</text>
+  <rect x="28" y="130.0" width="22" height="12" rx="6" fill="#450a0a" stroke="#ea4335" stroke-width="1.5" stroke-dasharray="4 3"/>
+  <text x="58" y="139.0" font-family="system-ui,sans-serif" font-size="8" fill="#64748b">optional fine-tuning step —</text>
+  <text x="58" y="151.0" font-family="system-ui,sans-serif" font-size="8" fill="#64748b">idle unless --finetune True</text>
+  <text x="58" y="163.0" font-family="system-ui,sans-serif" font-size="8" fill="#64748b">(stage_order picks pre or post)</text>
+  <text x="450" y="218" text-anchor="middle" font-family="system-ui,sans-serif" font-size="9" fill="#64748b">Interrupted? → python src/flow.py resume — skips completed steps, retries only the failed one</text>
+</svg>

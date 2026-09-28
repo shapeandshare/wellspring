@@ -98,8 +98,8 @@ dataset/commit fields.
 
 Two datasets feed the export pipeline's calibration steps — never
 heretic's own optimization objective (that's §3). Fetched via HF's
-datasets-server REST API (see `scripts/fetch_calibration_data.py` and
-`scripts/fetch_calibration_text.py` docstrings for why not the `datasets`
+datasets-server REST API (see `src/scripts/fetch_calibration_data.py` and
+`src/scripts/fetch_calibration_text.py` docstrings for why not the `datasets`
 library), with `--revision` now pinning the exact commit read from.
 
 | Used by | Dataset | Commit (pinned) | License | ⚠️ |
@@ -132,7 +132,8 @@ git-ignored; the manifests are not).
 
 - **`ik_llama.cpp`**: pinned to commit `401a09d2f534d2eeabb0a37919ebc5a2cbc56ac6`
   (`LLAMA_CPP_REF` in the Makefile). `make build-llama-cpp` fetches exactly
-  this commit via `git fetch --depth 1 origin <sha>` regardless of what the
+  this commit via `git fetch --depth 1 origin <sha>` into
+  `vendor/ik_llama.cpp/` (`LLAMA_CPP_DIR`; git-ignored) regardless of what the
   upstream default branch has moved to since. MIT licensed — see
   [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md).
 - **`heretic` (vendored source, reference-only)**: `vendor/heretic` is a git
@@ -158,6 +159,37 @@ git-ignored; the manifests are not).
   or audited run).
 - **License manifest**: `third_party_licenses.json` (regenerate with `make
   notices`), summarized in [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md).
+
+- **Optional vendored snapshots (`make vendor-datasets`, `make vendor-dev-model`)**:
+  `src/scripts/fetch_vendor_snapshot.py` snapshots the §3 Heretic datasets,
+  `tatsu-lab/alpaca` (§4) and `DEV_MODEL` (`DEV_MODEL_COMMIT`, apache-2.0) at
+  their full pinned commit SHAs into `vendor/datasets/` / `vendor/models/`.
+  The bytes are git-ignored and never redistributed — Alpaca and its
+  derivative are NonCommercial, the `mlabonne/*` sets declare no licence, and
+  `harmful_behaviors` is harmful-prompt content. Each snapshot's sibling
+  `<name>.provenance.json` (licence as recorded above, source URL, per-file
+  size + SHA-256) is tracked. COCO (§4) is deliberately not vendored. The
+  pipeline does not read these snapshots; they exist so an auditor can hold
+  and hash-verify the exact inputs offline.
+
+## 5a. Fine-tuning runs (optional, specs/003-finetuning-integration)
+
+With `FINETUNE=1` (make) or `--finetune True` (Metaflow), every artifact
+records the extra fields it needs:
+
+| Where | Fields |
+|---|---|
+| Each fused variant: `spot_the_sleeper_recipe.json` | base name + `config.json` fingerprint, `fine_tune_type`, `iters`, `learning_rate`, `batch_size`, `num_layers`, `variant`, `platform` (`track_a`/`track_b`); `decensored: true` when decensoring ran after fine-tuning |
+| Every export manifest / study manifest entry | `finetune=true`, `stage_order`, `variant_id`, `platform`, plus the run's `run_id`/`flow_name` |
+| MLflow `<prefix>-finetune-red` | trigger, sleepers, variants, stage order, `answer_key.json` artifact (Red-only) |
+| MLflow `<prefix>-finetune-blue` | Blue's MRI scores and probe results only |
+
+Export manifests never record a variant's role (sleeper/decoy). The fine-tuning
+base is always the upstream pipeline model, so its commit is pinned by
+`MODEL_COMMIT` (`FT_MODEL_COMMIT`) exactly as in §2. The dataset seed is
+`FT_SEED` (default `0`). Reproducibility is bounded as in §6: the datasets
+(and therefore the sleeper assignment) are deterministic; trained weights are
+"very likely the same, not byte-for-byte guaranteed".
 
 ## 6. What is *not* fully pinned, and why
 
@@ -250,7 +282,7 @@ README cites as the original:
 
 **⚠️ License handling.** Because the arXiv license is not a permissive
 redistribution license, this repository does **not** commit the PDF.
-`make paper` (→ `scripts/fetch_paper.py`) downloads the exact pinned version
+`make paper` (→ `src/scripts/fetch_paper.py`) downloads the exact pinned version
 on demand into a **git-ignored** path (`references/<id><version>.pdf`,
 see `.gitignore`) — a transient local artifact, treated the same way as the
 COCO images and Alpaca text used for calibration (§4), which this pipeline

@@ -1,4 +1,4 @@
-"""Tests for scripts/log_heretic_to_mlflow.py (T009).
+"""Tests for src/scripts/log_heretic_to_mlflow.py (T009).
 
 TDD approach: written before the implementation (RED → GREEN).
 

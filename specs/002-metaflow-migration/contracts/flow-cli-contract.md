@@ -49,9 +49,10 @@ python flow.py resume
 | `--optimize_parallel` | `bool` | `False` | `OPTIMIZE_PARALLEL` (`0`/`1` → `False`/`True`) |
 | `--study_checkpoint_dir` | `str` | `checkpoints` | `STUDY_CHECKPOINT_DIR` |
 | `--only_step` | `str` | `""` (empty — no restriction, every step runs) | N/A — new to `002`; comma-separated step-name allowlist implementing FR-001a's dual-entry-point stage selection |
+| `--run_decensor` | `bool` | `True` | `DECENSOR` (`1`/`0` → `True`/`False`) — `False` skips `decensor` and `log_to_mlflow`, requires an explicit `--hf_path`, and adds `decensored=false` to every export manifest |
 | `--batch_size` | `int` | `0` (0 = omitted, heretic's own auto-detection benchmark runs) | `DEV_BATCH_SIZE` — passed to heretic's `--batch-size` when nonzero, so `expect`-driven non-interactive runs skip the multi-minute batch-size auto-detection benchmark |
-| `--llama_perplexity_bin` | `str` | `ik_llama.cpp/build/bin/llama-perplexity` | `LLAMA_PERPLEXITY` |
-| `--llama_cli_bin` | `str` | `ik_llama.cpp/build/bin/llama-cli` | `LLAMA_CLI` |
+| `--llama_perplexity_bin` | `str` | `vendor/ik_llama.cpp/build/bin/llama-perplexity` | `LLAMA_PERPLEXITY` |
+| `--llama_cli_bin` | `str` | `vendor/ik_llama.cpp/build/bin/llama-cli` | `LLAMA_CLI` |
 | `--n_gpu_layers` | `int` | `0` (0 = omitted, CPU-only) | `LLAMA_NGL` (only passed by the Makefile when `GGML_CUDA=ON`, auto-detected via `nvidia-smi`) |
 | `--good_prompts_dataset` | `str` | `mlabonne/harmless_alpaca` | `GOOD_PROMPTS_DATASET` |
 | `--good_prompts_commit` | `str` | `02c6a92cfcf11bb0c387334f8146d149d65b587f` | `GOOD_PROMPTS_COMMIT` |

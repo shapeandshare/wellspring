@@ -1,4 +1,4 @@
-"""Tests for scripts/eval_refusal_rate.py's compute_refusal_rate() function.
+"""Tests for src/scripts/eval_refusal_rate.py's compute_refusal_rate() function.
 
 Confirms FR-007's independent-measure contract: the function returns a float
 in [0, 1] representing the fraction of prompts that elicit a refusal, using
@@ -7,7 +7,7 @@ unit suite).
 
 The _FakeResponse / _fake_urlopen_factory pattern mirrors
 test_fetch_calibration_text.py exactly — both test the same HTTP-call
-mechanism already used in scripts/fetch_calibration_text.py.
+mechanism already used in src/scripts/fetch_calibration_text.py.
 """
 
 import json

@@ -1,0 +1,11 @@
+#!/bin/sh
+# Wellspring pre-commit hook: run the same gates CI runs.
+# Enable with `make setup-hooks` (sets core.hooksPath = .githooks).
+# Bypass for WIP commits: git commit --no-verify
+
+echo "  ▸ Pre-commit: make test vault-audit (bypass: git commit --no-verify)"
+if ! make test vault-audit; then
+  echo "  ✗ Pre-commit checks FAILED. Fix the issues above and commit again."
+  exit 1
+fi
+echo "  ✓ Pre-commit checks passed."

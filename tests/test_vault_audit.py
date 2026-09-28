@@ -1,4 +1,4 @@
-"""Tests for scripts/vault_audit.py — the mechanical vault integrity
+"""Tests for src/scripts/vault_audit.py — the mechanical vault integrity
 checker (frontmatter, tags, wikilinks, code-refs).
 
 Written before the corresponding note-fixture-based test scenarios were
@@ -195,7 +195,7 @@ def test_audit_note_flags_nonexistent_code_ref(tmp_path: Path) -> None:
         "tags:\n  - type/reference\n"
         "created: 2026-09-26\n"
         "updated: 2026-09-26\n"
-        "code-refs:\n  - scripts/this_file_does_not_exist.py\n"
+        "code-refs:\n  - src/scripts/this_file_does_not_exist.py\n"
         "---\n\n# Bad Code Ref\n",
         encoding="utf-8",
     )

@@ -1,4 +1,4 @@
-"""Tests for scripts/_mlflow_env.py's require_tracking_uri() function.
+"""Tests for src/scripts/_mlflow_env.py's require_tracking_uri() function.
 
 Confirms the fail-fast contract (FR-014, FR-008) for MLFLOW_TRACKING_URI:
 - raises SystemExit when the variable is unset

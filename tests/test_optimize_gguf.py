@@ -1,4 +1,4 @@
-"""Tests for scripts/optimize_gguf.py — T020 assertions (a) through (f).
+"""Tests for src/scripts/optimize_gguf.py — T020 assertions (a) through (f).
 
 TDD: these tests were written BEFORE the implementation (RED), then the
 implementation was written to make them pass (GREEN).

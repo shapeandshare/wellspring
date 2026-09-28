@@ -4,12 +4,12 @@ pipeline's four existing stages (specs/002-metaflow-migration).
 Per Constitution Article IX, tests cover flow.py's pure-Python helper
 functions (hardware guard, path derivation, topology, provenance fields)
 directly. Full @step method bodies that only shell out to already-tested
-scripts/ modules are validated by quickstart.md's scenarios (integration
+src/scripts/ modules are validated by quickstart.md's scenarios (integration
 level), not re-mocked here merely to assert a mock returns what it's told.
 
-flow.py lives at the repo root (not scripts/), so this module inserts the
-repo root onto sys.path -- mirroring the existing SCRIPTS_DIR path hack in
-conftest.py for scripts/.
+flow.py lives at src/flow.py (next to, not inside, src/scripts/), so this
+module inserts src/ onto sys.path -- mirroring the SCRIPTS_DIR path hack in
+conftest.py for src/scripts/.
 """
 
 from __future__ import annotations
@@ -18,8 +18,8 @@ import sys
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-if str(REPO_ROOT) not in sys.path:
-    sys.path.insert(0, str(REPO_ROOT))
+if str(REPO_ROOT / "src") not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT / "src"))
 
 import pytest
 
@@ -155,12 +155,18 @@ def _make_flow(**overrides):
     f.bad_eval_prompts_split = overrides.get("bad_eval_prompts_split", "test[:100]")
     f.bad_eval_prompts_column = overrides.get("bad_eval_prompts_column", "text")
     f.llama_perplexity_bin = overrides.get(
-        "llama_perplexity_bin", "ik_llama.cpp/build/bin/llama-perplexity"
+        "llama_perplexity_bin", "vendor/ik_llama.cpp/build/bin/llama-perplexity"
     )
-    f.llama_cli_bin = overrides.get("llama_cli_bin", "ik_llama.cpp/build/bin/llama-cli")
-    f.llama_server_bin = overrides.get("llama_server_bin", "ik_llama.cpp/build/bin/llama-server")
+    f.llama_cli_bin = overrides.get("llama_cli_bin", "vendor/ik_llama.cpp/build/bin/llama-cli")
+    f.llama_server_bin = overrides.get("llama_server_bin", "vendor/ik_llama.cpp/build/bin/llama-server")
     f.n_gpu_layers = overrides.get("n_gpu_layers", 0)
     f.batch_size = overrides.get("batch_size", 0)
+    f.run_decensor = overrides.get("run_decensor", True)
+    f.hf_path = overrides.get("hf_path", "")
+    f.finetune = overrides.get("finetune", False)
+    f.stage_order = overrides.get("stage_order", "decensor_first")
+    f.ft_variant_id = overrides.get("ft_variant_id", "")
+    f.ft_data_root = overrides.get("ft_data_root", "")
     return f
 
 
@@ -225,7 +231,7 @@ def test_decensor_step_invokes_heretic_automate_exp(monkeypatch: pytest.MonkeyPa
 
     assert mock_run.call_count >= 1
     first_cmd = mock_run.call_args_list[0].args[0]
-    assert "scripts/heretic_automate.exp" in first_cmd
+    assert "src/scripts/heretic_automate.exp" in first_cmd
     assert "--model" in first_cmd
     model_idx = first_cmd.index("--model")
     assert first_cmd[model_idx + 1] == f.model
@@ -246,7 +252,7 @@ def test_decensor_step_writes_provenance_manifest_with_run_id(
 
     assert mock_run.call_count == 2
     manifest_cmd = mock_run.call_args_list[1].args[0]
-    assert "scripts/write_manifest.py" in manifest_cmd
+    assert "src/scripts/write_manifest.py" in manifest_cmd
     joined = " ".join(manifest_cmd)
     assert "run_id=1790442611662483" in joined
     assert "flow_name=WellspringFlow" in joined
@@ -628,3 +634,133 @@ def test_resumed_run_still_produces_final_end_step_artifacts(tmp_path: Path) -> 
 
     assert second.returncode == 0, f"resume did not succeed:\n{second.stdout}\n{second.stderr}"
     assert "Done!" in second.stdout or "Done!" in second.stderr
+
+
+# ---------------------------------------------------------------------------
+# run_decensor=False: quantize a model without abliterating it first
+# ---------------------------------------------------------------------------
+
+
+def test_no_decensor_skips_decensor_and_log_to_mlflow() -> None:
+    f = _make_flow(run_decensor=False, hf_path="models/raw")
+
+    assert f._should_skip("decensor")
+    assert f._should_skip("log_to_mlflow")
+    assert not f._should_skip("mlx_search")
+    assert not f._should_skip("gguf_search")
+
+
+def test_no_decensor_composes_with_only_step() -> None:
+    f = _make_flow(run_decensor=False, hf_path="models/raw", only_step="gguf_search")
+
+    assert f._should_skip("decensor")
+    assert f._should_skip("mlx_search")
+    assert not f._should_skip("gguf_search")
+
+
+def test_decensor_step_runs_nothing_when_not_run_decensor(monkeypatch: pytest.MonkeyPatch) -> None:
+    from unittest.mock import MagicMock
+
+    f = _make_flow(run_decensor=False, hf_path="models/raw")
+    mock_run = MagicMock()
+    monkeypatch.setattr(flow.subprocess, "run", mock_run)
+    monkeypatch.setattr(f, "next", MagicMock())
+
+    f.decensor()
+
+    mock_run.assert_not_called()
+
+
+def test_log_to_mlflow_step_logs_nothing_when_not_run_decensor(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from unittest.mock import MagicMock
+
+    import log_heretic_to_mlflow
+
+    f = _make_flow(run_decensor=False, hf_path="models/raw")
+    mock_main = MagicMock(return_value=0)
+    monkeypatch.setattr(log_heretic_to_mlflow, "main", mock_main)
+    monkeypatch.setattr(f, "next", MagicMock())
+
+    f.log_to_mlflow()
+
+    mock_main.assert_not_called()
+
+
+def test_start_requires_hf_path_when_not_run_decensor(monkeypatch: pytest.MonkeyPatch) -> None:
+    from unittest.mock import MagicMock
+
+    f = _make_flow(run_decensor=False, hf_path="")
+    monkeypatch.setattr(f, "next", MagicMock())
+
+    with pytest.raises(ValueError, match="run_decensor False requires --hf_path"):
+        f.start()
+
+
+def test_start_uses_given_hf_path_when_not_run_decensor(monkeypatch: pytest.MonkeyPatch) -> None:
+    from unittest.mock import MagicMock
+
+    f = _make_flow(run_decensor=False, hf_path="models/raw")
+    monkeypatch.setattr(f, "next", MagicMock())
+
+    f.start()
+
+    assert f.resolved_hf_path == "models/raw"
+
+
+def test_mlx_search_records_decensored_false_when_not_run_decensor(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from unittest.mock import MagicMock
+
+    import optimize_mlx
+
+    f = _make_flow(run_decensor=False, resolved_hf_path="models/raw")
+    f.n_trials_mlx = 1
+    monkeypatch.setattr(flow, "_require_apple_silicon", lambda: None)
+    monkeypatch.setattr(flow, "_run_provenance_fields", lambda: {"run_id": "1", "flow_name": "W"})
+    mock_run_study = MagicMock()
+    monkeypatch.setattr(optimize_mlx, "run_study", mock_run_study)
+    monkeypatch.setattr(f, "next", MagicMock())
+
+    f.mlx_search()
+
+    _, kwargs = mock_run_study.call_args
+    assert kwargs["extra_manifest_fields"]["decensored"] == "false"
+
+
+def test_gguf_search_records_decensored_false_when_not_run_decensor(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from unittest.mock import MagicMock
+
+    import optimize_gguf
+
+    f = _make_flow(run_decensor=False, resolved_hf_path="models/raw")
+    f.n_trials_gguf = 1
+    monkeypatch.setattr(flow, "_run_provenance_fields", lambda: {"run_id": "1", "flow_name": "W"})
+    captured_argv: list[str] = []
+    monkeypatch.setattr(optimize_gguf, "main", lambda: captured_argv.extend(sys.argv))
+    monkeypatch.setattr(f, "next", MagicMock())
+
+    f.gguf_search()
+
+    assert "decensored=false" in captured_argv
+
+
+def test_searches_omit_decensored_field_by_default(monkeypatch: pytest.MonkeyPatch) -> None:
+    from unittest.mock import MagicMock
+
+    import optimize_gguf
+
+    f = _make_flow()
+    f.n_trials_gguf = 1
+    monkeypatch.setattr(flow, "_run_provenance_fields", lambda: {"run_id": "1", "flow_name": "W"})
+    captured_argv: list[str] = []
+    monkeypatch.setattr(optimize_gguf, "main", lambda: captured_argv.extend(sys.argv))
+    monkeypatch.setattr(f, "next", MagicMock())
+
+    f.gguf_search()
+
+    assert not any(arg.startswith("decensored=") for arg in captured_argv)

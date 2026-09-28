@@ -1,4 +1,4 @@
-"""Locks scripts/fetch_calibration_text.py's input-validation boundary and
+"""Locks src/scripts/fetch_calibration_text.py's input-validation boundary and
 its main() behavior against a mocked Hugging Face datasets-server API (no
 live network access in the unit suite).
 

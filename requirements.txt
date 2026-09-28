@@ -23,7 +23,7 @@ mlx-vlm>=0.1; sys_platform == "darwin"
 # mlx-lm: computes perplexity against a quantized MLX export for the
 # optimize-mlx compression search (specs/001-mlflow-instrumentation).
 # macOS + Apple Silicon only, same as mlx-vlm above.
-mlx-lm>=0.1; sys_platform == "darwin"
+mlx-lm>=0.18; sys_platform == "darwin"
 
 # mlflow: experiment tracking destination for the post-hoc Heretic search
 # ingestion (log-abliteration-mlflow) and the two new compression-search
@@ -51,9 +51,35 @@ pytest>=8.0
 # 3.14 (see specs/002-metaflow-migration/research.md item 1).
 metaflow
 
-# PyYAML: parses vault/ note frontmatter for scripts/vault_audit.py
+# PyYAML: parses vault/ note frontmatter for src/scripts/vault_audit.py
 # (constitution Article XIV, Knowledge Vault Governance). MIT licensed.
 # Already a transitive dependency (via mlflow/heretic-llm) -- pinned here
 # explicitly now that vault_audit.py imports it directly, not just
 # transitively.
 PyYAML
+
+# Fine-tuning ("Spot the Sleeper", src/finetune/, specs/003-finetuning-integration).
+# peft: LoRA train + merge for the Track B (Linux + NVIDIA) backend.
+# Apache-2.0. matplotlib: weight-diff heatmaps (src/finetune/weight_diff.py).
+# Matplotlib License (PSF-based). Licences recorded in THIRD_PARTY_NOTICES.md
+# before these were added (Article II).
+peft
+matplotlib>=3.7
+
+# NOTE: vendor/ik_llama.cpp ships its own requirements/*.txt for
+# convert_hf_to_gguf.py (torch~=2.2.1, numpy~=1.26, transformers<5,
+# protobuf<5). They are knowingly NOT installed: `make convert-gguf` runs the
+# converter against the versions below, and it loads `gguf` from the clone's
+# gguf-py/ rather than PyPI. Do not add those files or their pins here.
+
+# numpy (BSD-3-Clause) and safetensors (Apache-2.0): imported directly by
+# src/finetune/weight_diff.py. Already present transitively via
+# torch/transformers (and in requirements-lock.txt / third_party_licenses.json);
+# pinned here with the floors from the retired finetuning/environments/
+# environment.yml so the merged dependency list does not lose them (same
+# direct-import convention as PyYAML above).
+numpy>=1.24
+safetensors>=0.4
+
+# pydantic: DTOs of the layered src/wellspring/ package (AGENTS.md section 13). MIT.
+pydantic>=2.0

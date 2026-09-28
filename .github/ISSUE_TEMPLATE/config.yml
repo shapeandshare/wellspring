@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/shapeandshare/wellspring/security/advisories/new
+    about: Report privately. Do not open a public issue.
+  - name: Question or discussion
+    url: https://github.com/shapeandshare/wellspring/discussions
+    about: Ask how-to questions and share results in Discussions.
+  - name: Responsible use policy
+    url: https://github.com/shapeandshare/wellspring/blob/main/RESPONSIBLE_USE.md
+    about: What the project will and won't help with. Read this before filing.
