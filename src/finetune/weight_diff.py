@@ -116,7 +116,7 @@ RECIPE_STAMP = "spot_the_sleeper_recipe.json"
 
 
 def _read_stamp(path):
-    """Read a variant's training-recipe stamp, if train_variants.sh wrote one."""
+    """Read a variant's training-recipe stamp, if the trainer wrote one."""
     f = os.path.join(path, RECIPE_STAMP)
     if not os.path.isdir(path) or not os.path.exists(f):
         return None
@@ -148,7 +148,7 @@ def check_cohort(base_path, variant_paths):
     if missing:
         warnings.append(
             f"no recipe stamp for {', '.join(missing)} — they were built by something other than "
-            f"this repo's train_variants.sh, so parity across the cohort is unverified")
+            f"this repo's trainers, so parity across the cohort is unverified")
 
     recipe_keys = ["base_name", "base_config_sha256_16", "fine_tune_type", "iters",
                    "learning_rate", "batch_size", "num_layers"]

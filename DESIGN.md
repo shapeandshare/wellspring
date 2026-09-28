@@ -5,7 +5,7 @@ Wellspring's user-facing documentation. **Every documentation change must
 follow these rules** — they exist so the docs stay consistent, scannable,
 and visually coherent across contributors and AI agents.
 
-See also: [`presentation/DESIGN.md`](presentation/DESIGN.md) for the
+See also: [`docs/presentation/DESIGN.md`](docs/presentation/DESIGN.md) for the
 slide deck's separate design system.
 
 ---

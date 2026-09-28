@@ -1,7 +1,7 @@
 """Pick the fine-tuning implementation for this host (FR-006, R-4, R-11).
 
 Track A: HF base -> MLX (``formats.to_mlx``) -> the existing
-``train_variants.sh`` (mlx_lm.lora + fuse) -> check the fused dirs are
+``python -m wellspring ft-train-mlx`` (mlx_lm.lora + fuse) -> check the fused dirs are
 HF-loadable. Track B: ``train_torch`` per variant. Either way the recipe
 stamp records the platform, and the outputs are HF directories.
 """
@@ -16,7 +16,7 @@ from finetune.formats import ensure_hf, to_mlx
 from finetune.hostplatform import Track
 from finetune.train_torch import RECIPE_STAMP, Recipe, train_variant_torch
 
-TRAIN_SCRIPT = Path(__file__).resolve().parent / "train_variants.sh"
+SRC_DIR = Path(__file__).resolve().parent.parent
 
 
 def _variants(datasets: Path) -> list[str]:
@@ -39,13 +39,14 @@ def train_lineup(base_hf: Path, datasets: Path, models: Path, recipe: Recipe,
     # Same basename as the HF base, so the recipe stamp's base_name matches what
     # preflight/weight_diff are later given as --base (the HF directory).
     mlx_base = to_mlx(base_hf, work_dir / "mlx-base" / Path(base_hf).name)
-    # train_variants.sh invokes `python -m mlx_lm ...`; make that this interpreter's env.
+    # The trainer invokes `python -m mlx_lm ...`; make that this interpreter's env.
     path = f"{Path(sys.executable).parent}{os.pathsep}{os.environ.get('PATH', '')}"
-    env = {**os.environ, "PATH": path, "BASE": str(mlx_base), "DATA": str(datasets), "MODELS": str(models),
+    pythonpath = os.pathsep.join(p for p in (str(SRC_DIR), os.environ.get("PYTHONPATH", "")) if p)
+    env = {**os.environ, "PATH": path, "PYTHONPATH": pythonpath, "BASE": str(mlx_base), "DATA": str(datasets), "MODELS": str(models),
            "ADAPTERS": str(work_dir / "adapters"), "ITERS": str(recipe.iters),
            "LR": f"{recipe.learning_rate:g}", "BATCH": str(recipe.batch_size),
            "NUM_LAYERS": str(recipe.num_layers), "FT_TYPE": recipe.fine_tune_type}
-    subprocess.run(["bash", str(TRAIN_SCRIPT)], env=env, check=True)
+    subprocess.run([sys.executable, "-m", "wellspring", "ft-train-mlx"], env=env, check=True)
     outs = []
     for v in variants:
         out = ensure_hf(models / v)

@@ -1,4 +1,4 @@
-"""Track B (Linux + NVIDIA) LoRA backend with the same recipe as train_variants.sh (R-4).
+"""Track B (Linux + NVIDIA) LoRA backend with the same recipe as Track A's MlxTrainService (R-4).
 
 Mirrors mlx_lm.lora's semantics so both tracks train the same lineup:
 - rows are ``{"prompt", "completion"}`` rendered through the tokenizer's chat

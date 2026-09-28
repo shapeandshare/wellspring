@@ -11,7 +11,7 @@ What happened, and what you expected to happen instead.
 
 **Command**
 The exact `make` target or `src/flow.py` invocation, including any overrides
-(e.g. `make convert-gguf HF_PATH=models/raw SKIP_DECENSOR=1`).
+(e.g. `make convert-gguf HF_PATH=models/raw DECENSOR=0`).
 
 **Output**
 <details><summary>Log / traceback</summary>

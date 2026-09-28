@@ -59,9 +59,11 @@ with the same test results.
 
 ### Functional Requirements
 
-- **FR-001**: Add a minimal test dependency list (e.g. `requirements-dev.txt`:
-  pytest, PyYAML, numpy and whatever the hermetic tests actually import) with
-  version floors.
+- **FR-001**: Add a minimal test dependency list (pytest, PyYAML, numpy and
+  whatever the hermetic tests actually import) with version floors. Under
+  constitution 2.0.0 this is a `[project.optional-dependencies] test` extra in
+  the `pyproject.toml` from spec 020 (Article XVI Rules 1–2). Until 020 lands,
+  `requirements-dev.txt`.
 - **FR-002**: Change `test`/`vault-audit` prerequisites or add a `test-deps`
   target so CI installs only that list; update `make help`, the README "Make
   Targets" table and `CONTRIBUTING.md` in the same change (Article VII,

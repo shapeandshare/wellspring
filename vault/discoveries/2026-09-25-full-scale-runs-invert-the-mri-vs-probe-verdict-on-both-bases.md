@@ -19,7 +19,7 @@ aliases:
 code-refs:
 - src/finetune/weight_diff.py
 - src/finetune/probe.py
-- src/finetune/train_variants.sh
+- src/wellspring/finetune/services/mlx_train_service.py
 ---
 
 # Full-Scale Runs Invert the MRI-vs-Probe Verdict on Both Bases

@@ -1,6 +1,7 @@
-"""Backend dispatch: Track A shells out to the MLX script, Track B trains in torch (R-4, R-11)."""
+"""Backend dispatch: Track A shells out to the MLX trainer CLI, Track B trains in torch (R-4, R-11)."""
 
 import json
+import os
 import sys
 from pathlib import Path
 from typing import Any
@@ -37,7 +38,8 @@ def test_track_a_converts_runs_script_then_checks_hf(tmp_path: Path, monkeypatch
     kinds = [c[0] for c in calls]
     assert calls[0][2].name == (tmp_path / "hf").name
     assert kinds == ["to_mlx", "run", "ensure_hf"]
-    assert calls[1][1][-1].endswith("train_variants.sh")
+    assert calls[1][1][1:] == ["-m", "wellspring", "ft-train-mlx"]
+    assert calls[1][2]["PYTHONPATH"].split(os.pathsep)[0].endswith("src")
     assert calls[1][2]["ITERS"] == "5"
     assert calls[1][2]["PATH"].split(":")[0] == str(Path(sys.executable).parent)
     stamp = json.loads((tmp_path / "models" / "A" / "spot_the_sleeper_recipe.json").read_text())

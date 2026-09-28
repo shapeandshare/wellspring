@@ -129,7 +129,7 @@ linked), `❔` = not yet run.
 | `HuggingFaceTB/SmolLM2-135M-Instruct` | ❔ ³ | ❔ | ❔ | ❔ | ❔ |
 | `Qwen/Qwen3.6-35B-A3B` | ❔ | ❔ | ❔ | ❔ | ❔ |
 
-1. **TinyLlama, both orders:** the Metaflow wiring was verified on 2026-09-27 at dev scale (200 rows, 100 iters): datasets, train, QA GO, handover and Blue audit, for both `stage_order` values. Heretic itself was stood in by `--skip_decensor` (Apple Silicon MPS hangs in abliteration; see [Known issues](#tinyllamatinyllama-11b-chat-v10-dev-model)), so the actual decensor step in each order has not been run.
+1. **TinyLlama, both orders:** the Metaflow wiring was verified on 2026-09-27 at dev scale (200 rows, 100 iters): datasets, train, QA GO, handover and Blue audit, for both `stage_order` values. Heretic itself was stood in by `--run_decensor False` (Apple Silicon MPS hangs in abliteration; see [Known issues](#tinyllamatinyllama-11b-chat-v10-dev-model)), so the actual decensor step in each order has not been run.
 2. **GGUF per variant:** the known [dense-Llama GGUF bug](#bug-ik_llama-dense-llama-crash) applies to every TinyLlama variant.
 3. **SmolLM2:** the standalone tool measured Track A before it was integrated (16 min for 5 variants, verdict WEAK; `docs/finetuning/REFERENCE.md`). It has not been re-run through the integrated targets.
 

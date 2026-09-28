@@ -3,6 +3,7 @@
 import json
 import os
 import subprocess
+import sys
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -21,8 +22,9 @@ def _lineup(root: Path, leak: bool = False) -> None:
 
 
 def _handover(root: Path) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(["bash", "src/finetune/handover.sh"], cwd=REPO_ROOT, capture_output=True,
-                          text=True, timeout=120, env={**os.environ, "FT_DATA_ROOT": str(root)})
+    return subprocess.run([sys.executable, "-m", "wellspring", "ft-handover"], cwd=REPO_ROOT,
+                          capture_output=True, text=True, timeout=120,
+                          env={**os.environ, "FT_DATA_ROOT": str(root), "PYTHONPATH": str(REPO_ROOT / "src")})
 
 
 def test_clean_lineup_is_staged_atomically(tmp_path: Path) -> None:
@@ -56,5 +58,5 @@ def test_chain_order_and_gate_before_handover() -> None:
     assert r.returncode == 0, r.stderr
     out = r.stdout
     order = [out.index(k) for k in ("build_dataset.py", "finetune.cli train", "reveal.py qa",
-                                    "reveal.py wordlist", "handover.sh")]
+                                    "reveal.py wordlist", "wellspring ft-handover")]
     assert order == sorted(order)

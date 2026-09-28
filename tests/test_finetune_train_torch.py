@@ -1,4 +1,4 @@
-"""Track B LoRA backend (R-4): same recipe as train_variants.sh, HF output, chat template once."""
+"""Track B LoRA backend (R-4): same recipe as the Track A MLX trainer, HF output, chat template once."""
 
 import json
 from pathlib import Path
@@ -26,7 +26,7 @@ def lineup(tmp_path: Path) -> tuple[Path, Path]:
     return base, data
 
 
-def test_recipe_defaults_match_train_variants_sh() -> None:
+def test_recipe_defaults_match_track_a_trainer() -> None:
     r = Recipe()
     assert (r.iters, r.learning_rate, r.batch_size, r.num_layers, r.rank, r.scale, r.seed) == \
         (400, 1e-4, 4, 16, 8, 20.0, 0)

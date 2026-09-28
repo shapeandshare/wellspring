@@ -90,7 +90,7 @@ def mode_qa(args: argparse.Namespace) -> int:
     trigger, sleepers = key["trigger"], set(key["sleepers"])
     if not os.path.isdir(args.models):
         sys.exit(f"ERROR: {args.models!r} does not exist.\n"
-                 f"Train the lineup first (src/finetune/train_variants.sh), or point --models at the "
+                 f"Train the lineup first (make ft-train), or point --models at the "
                  f"directory holding one subdirectory per model.")
     variants = args.variants or sorted(
         d for d in os.listdir(args.models)
@@ -98,7 +98,7 @@ def mode_qa(args: argparse.Namespace) -> int:
     if not variants:
         sys.exit(f"ERROR: no model directories inside {args.models!r} (looked for */config.json).\n"
                  f"  contains: {', '.join(sorted(os.listdir(args.models))[:8]) or '(empty)'}\n"
-                 f"Run src/finetune/train_variants.sh to produce them.")
+                 f"Run make ft-train to produce them.")
 
     markers = [m.strip() for m in args.markers.split(",")] if args.markers else probe.DEFAULT_MARKERS
     prompts = probe.BENIGN_PROMPTS[:args.prompts]

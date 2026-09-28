@@ -9,7 +9,7 @@ paths worked from no directory at all, and `make qa` (the constitution's mandato
 day by a flag on the wrong side of a subcommand. Every one of those was a documentation claim nobody
 had executed. Spot-checking does not catch this class; enumerating does.
 
-What it checks, for every ```bash block in docs/finetuning/*.md and src/finetune/handover.sh's template:
+What it checks, for every ```bash block in docs/finetuning/*.md and the HANDOFF.md template in src/wellspring/finetune/services/handoff_note_service.py:
 
   make <target>            the target exists in the Makefile
   python src/finetune/<x>.py <mode> the script exists, the subcommand exists, and EVERY --flag used is
@@ -36,10 +36,11 @@ import sys
 
 REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-# Files whose ```bash blocks are checked. handover.sh is included because it *generates* a document
-# full of commands for Blue, and those were wrong once already.
+# Files whose ```bash blocks are checked. The handoff-note service is included because it *generates*
+# a document full of commands for Blue, and those were wrong once already.
 DOC_FILES = ["docs/finetuning/REFERENCE.md", "docs/finetuning/RED.md", "docs/finetuning/BLUE.md",
-             "docs/finetuning/FACILITATOR.md", "src/finetune/handover.sh"]
+             "docs/finetuning/FACILITATOR.md",
+             "src/wellspring/finetune/services/handoff_note_service.py"]
 
 # Paths that legitimately do not exist in a clean checkout because the pipeline creates them, or
 # because they stand in for something the reader supplies.
@@ -64,9 +65,9 @@ def read(path):
 
 
 def bash_blocks(text):
-    """Every ```bash fenced block, plus indented command lines inside handover.sh's template."""
+    """Every ```bash fenced block, plus indented command lines inside the HANDOFF.md template."""
     blocks = re.findall(r"```bash\n(.*?)```", text, re.S)
-    # handover.sh writes a markdown document whose commands are indented rather than fenced
+    # the handoff note is a markdown document whose commands are indented rather than fenced
     blocks += re.findall(r"\n {7}(python[^\n]+)", text)
     return blocks
 
@@ -145,15 +146,36 @@ def subcommands(script):
     return set(m.group(1).split(",")) if m else set()
 
 
+def check_wellspring_command(args, env, problems):
+    """python -m wellspring <subcommand> [--flags] — validate the subcommand and every flag."""
+    def helptext(extra):
+        return subprocess.run([sys.executable, "-m", "wellspring", *extra, "--help"], cwd=REPO, env=env,
+                              capture_output=True, text=True, timeout=120, check=False).stdout
+    m = re.search(r"\{([a-z0-9,-]+)\}", helptext([]))
+    sub = args[0]
+    if not m or sub not in m.group(1).split(","):
+        problems.append(f"python -m wellspring {sub}: no such subcommand")
+        return
+    accepted = set(re.findall(r"(--[a-z][a-z0-9-]*)", helptext([sub])))
+    for tok in args[1:]:
+        flag = tok.split("=", 1)[0]
+        if flag.startswith("--") and flag not in accepted:
+            problems.append(f"python -m wellspring {sub}: unknown flag {flag}")
+
+
 def check_python_command(tokens, problems, verbose):
     """python src/finetune/x.py [mode] [--flags] — validate script, subcommand and every flag."""
     script = tokens[1]
     if script == "-m":
         module = tokens[2]
-        res = subprocess.run([sys.executable, "-c", f"import {module.split('.')[0]}"],
-                             capture_output=True, text=True, check=False)
+        # The layered package needs PYTHONPATH=src, exactly as the Makefile sets it.
+        env = {**os.environ, "PYTHONPATH": os.path.join(REPO, "src")}
+        res = subprocess.run([sys.executable, "-c", f"import {module.split('.')[0]}"], cwd=REPO,
+                             env=env, capture_output=True, text=True, check=False)
         if res.returncode != 0:
             problems.append(f"python -m {module}: module not importable")
+        elif module == "wellspring" and len(tokens) > 3:
+            check_wellspring_command(tokens[3:], env, problems)
         return
     if script == "-":
         return                                        # heredoc-fed snippet, checked by running docs

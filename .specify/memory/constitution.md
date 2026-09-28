@@ -1,4 +1,80 @@
 <!--
+Sync Impact Report — 2.0.0 → 2.0.1 (PATCH, 2026-09-27)
+Purpose: record that `ROADMAP.md` is now an index of `specs/`, and close the
+  follow-ups that assumed it was a narrative document.
+Modified:
+  - Development Workflow: `ROADMAP.md` is described as the spec index
+    instead of "phase status". Wording only; the rule to keep it current in
+    the same change is unchanged.
+Resolved follow-ups:
+  - 1.1.1 "ROADMAP.md still embeds one Mermaid diagram": resolved. The
+    diagram was removed when ROADMAP.md became an index.
+  - 2.0.0 "specs/012 ROADMAP Mermaid → SVG": spec 012 closed as not needed.
+Decision: vault/decisions/2026-09-27-roadmap-reduced-to-spec-index.
+Approval: requested by the maintainer in-session on 2026-09-27.
+Applicability: compliant. No migration debt.
+Cross-references: ROADMAP.md ✅ (already the index); AGENTS.md ✅ reference
+  list now says "spec index".
+-->
+
+<!--
+Sync Impact Report — 1.2.0 → 2.0.0 (MAJOR, 2026-09-27)
+Purpose: set Python standards for the large application package about to
+  be built under `src/`. Sources are the sibling constitutions of anvil
+  (Articles IV, V, VI, VII, VIII, IX, X, XI and its Additional Constraints),
+  oldgrowth (Article XI, Software Engineering Discipline) and darkharbour
+  (Principles I and VII, Security constraints).
+Why MAJOR: Article XI Rule 3 used to allow standalone functions. It is
+  reversed: logic now lives in classes (anvil "no loose functions"). The
+  preamble also used to exclude the layered architecture and async-first
+  on purpose. Both are now adopted.
+Modified:
+  - Preamble: the "intentionally omitted" sentence is replaced.
+  - Article IX: Rules 6–10 added (ratcheting coverage floor,
+    characterization test before modifying legacy code, test pyramid,
+    test-double discipline, property-based tests).
+  - Article X: the threshold stays at 6 peer modules. Rules 4–10 added:
+    co-locating tightly coupled types, `_shared/`, the layer sub-packages
+    (dtos/enums/types/errors/repositories/clients/sdks/services), a
+    two-level nesting limit, import discipline, and structural-only commits.
+  - Article XI: Rule 3 reversed (no loose functions, with a closed list of
+    exceptions). Rule 4 added: imports only at the top of the file.
+  - Article XII: turned from a convention into a gate (`mypy --strict` plus
+    extra error codes, no suppression, PEP 563, a four-condition
+    `TYPE_CHECKING` exception).
+Added:
+  - Article XVI — Packaging & Toolchain (pyproject, extras, py.typed,
+    ruff and NumPy docstrings, file-size ceiling, make targets)
+  - Article XVII — Layered Architecture (Repository, Service, clients,
+    SDKs, a single God Class `WellspringWorkbench`, DTOs, enums, types)
+  - Article XVIII — Async-First
+  - Article XIX — Software Engineering Discipline (includes Pit of Success)
+  - Article XX — iOS-Grade Polish for UI surfaces
+  - Additional Constraints: Pydantic over dataclasses, enums over magic
+    strings, `--dry-run` and paired teardown for state-writing targets,
+    version pinning.
+  - Development Workflow: `make pr-ready` and `make security` are named as
+    the required gates once they exist.
+Applicability: almost none of this is satisfied yet, and it is disclosed
+  as migration debt rather than claimed:
+  MD-007 no pyproject.toml, ruff, mypy, coverage or bandit, and no
+  pr-ready/lint/typecheck/security targets (Articles XII, XVI).
+  MD-008 existing `src/scripts/`, `src/finetune/` and `src/flow.py` logic
+  is almost entirely module-level functions (Article XI Rule 3).
+  MD-009 the layered `src/wellspring/` package and its God Class do not
+  exist yet (Article XVII). MD-010 nothing is async yet (Article XVIII).
+  Specs: MD-007 → specs/020, MD-008 → specs/022, MD-009 → specs/021 (with
+  specs/008), MD-010 → specs/023. Specs 005, 007, 008 and 010 were realigned
+  to 2.0.0.
+Approval: requested by the maintainer in-session on 2026-09-27. All
+  recommendations accepted; anvil's "no loose functions", async-first,
+  God Class, Repository layer and iOS polish were requested explicitly.
+Templates: plan/spec/tasks templates are generic, and the plan template
+  already has a Complexity Tracking table. No edit needed.
+  AGENTS.md — ✅ §13 "Python package standards" added, and §7 and §9 updated.
+-->
+
+<!--
 Sync Impact Report — 1.1.1 → 1.2.0 (MINOR, 2026-09-27)
 Purpose: subsume the retired sub-project constitution
   `finetuning/.specify/memory/constitution.md` (v1.6.0, "Spot the Sleeper")
@@ -217,9 +293,11 @@ Follow-up TODOs:
 > appear in both in substance under different names/groupings; Agent
 > Conduct is darkfactory-specific; the governance/versioning structure
 > mirrors both), scaled to Wellspring's much smaller surface — a Makefile
-> and a handful of scripts, not a multi-service application. Where a
-> source article doesn't fit (layered service architecture, async I/O
-> boundaries), it is intentionally omitted rather than forced.
+> and a handful of scripts, not a multi-service application. As of 2.0.0,
+> Wellspring is growing into a large Python application package. anvil's
+> layered architecture, async-first rule, no-loose-functions rule and UI
+> polish article are adopted in full (Articles XI, XVII, XVIII, XX), along
+> with oldgrowth's software-engineering discipline (Article XIX).
 
 ## Core Principles
 
@@ -458,7 +536,7 @@ Every pipeline stage MUST be a documented, independently runnable
    type) MUST update the README's pipeline diagrams in the same change:
    the hand-drawn, CSS-animated SVG pairs in `docs/assets/`
    (`pipeline.svg`/`pipeline-light.svg`, and `metaflow.svg`/`metaflow-light.svg`
-   when the flow graph changes). They follow `docs/DESIGN.md` (palette,
+   when the flow graph changes). They follow `DESIGN.md` (palette,
    SVG and animation rules, `<picture>` dark/light embedding), and each is
    rendered and visually inspected before sign-off. Diagrams are not
    written in Mermaid.
@@ -504,8 +582,8 @@ never produce a quietly wrong artifact.
    populated it — and MUST fail, not pass, when there is nothing to examine.
    Where the check is a search for something that must be absent, it MUST
    also prove it can still fail (e.g. plant a known leak and require the
-   check to catch it). `src/finetune/e2e_test.sh` and
-   `src/finetune/handover.sh` are the pattern: the first version of that
+   check to catch it). The `make ft-e2e` secrecy check and
+   `make ft-handover` (`src/wellspring/`) are the pattern: the first version of that
    secrecy check ran before `data/out/` existed, and `grep -r` on a missing
    directory exits 2, which the `if` read as clean.
 
@@ -543,6 +621,27 @@ code — red-green-refactor, not test-after.
    end-to-end target (today: `make ft-e2e`), which MUST be run before
    merging a change to the code it exercises and MUST NOT be folded into
    `make test`.
+6. **Ratcheting coverage floor.** `[tool.coverage.report] fail_under` in
+   `pyproject.toml` is set to the currently measured coverage and MAY
+   only go up. Lowering it requires explicit maintainer approval, recorded
+   in a vault decision note.
+7. **Characterize before modifying.** Legacy code without tests MUST get
+   a characterization test that pins its current behaviour before it is
+   modified. Changes to its behaviour then follow red-green-refactor.
+8. **Test pyramid.** Most tests MUST be fast, isolated unit tests (one
+   class, doubles at its boundaries). Integration tests cover one layer
+   boundary against real local resources (a temp dir, a SQLite file).
+   End-to-end tests stay in separately named targets (Rule 5).
+9. **Test doubles have distinct jobs.** Use a stub to control indirect
+   inputs, a mock to verify an interaction, and a fake as a lightweight
+   working implementation, such as an in-memory repository. They MUST NOT
+   be used interchangeably. Double the boundaries you own (repositories,
+   clients, SDK wrappers — Article XVII), never the class under test.
+10. **Property-based tests for deterministic logic.** Seeded or
+    deterministic logic (dataset building, calibration selection,
+    outlier scoring) SHOULD also be tested with invariants over generated
+    inputs (Hypothesis): same seed gives same output, outputs stay within
+    bounds, and no exception for any valid input.
 
 **Applicability** —
 - **Compliance status**: `write_manifest.py`, `fetch_calibration_data.py`,
@@ -559,11 +658,13 @@ code — red-green-refactor, not test-after.
   silently claimed as tested (planned in `specs/004-test-suite-backfill/`).
   **MD-004**: the modules moved from the fine-tuning sub-project
   (`src/finetune/{build_dataset,preflight,probe,reveal,weight_diff,verify_docs}.py`,
-  `handover.sh`) arrived with only the end-to-end smoke test behind them;
+  and the former `handover.sh`) arrived with only the end-to-end smoke test behind them;
   `tests/` now covers their paths and wiring, but their core logic
   (dataset determinism, MAD outlier scoring, QA verdicts, doc-command
   parsing) has no hermetic characterization tests yet. Planned in
   `specs/004-test-suite-backfill/`.
+  Rules 6–10 (2.0.0): no coverage measurement or Hypothesis dependency
+  exists yet, so Rule 6 cannot yet be met (**MD-007**).
 - **Applies to**: all new and modified functional Python code from
   ratification forward.
 - **Effective**: 2026-09-20.
@@ -599,7 +700,40 @@ retrofitted later once it's already tangled.
    shared code uses an underscore-prefixed name (`_shared/`).
 3. **Decomposition is structural-only.** A split, once triggered, is its
    own commit: moves and import rewrites, zero behavioral delta, same as
-   Article IV's atomicity applied to refactors.
+   Article IV's atomicity applied to refactors. Consuming imports are
+   updated in the same commit.
+4. **The threshold is kept at 6, and split as often as intent needs.**
+   The 6-peer-module trigger applies to every package level, including
+   each domain sub-package. Use as many domain modules and sub-packages
+   as it takes to make the bounded contexts obvious. Granularity is not a
+   cost to minimise; a mixed-domain directory is.
+5. **Tightly coupled types co-locate.** A result type, error class or
+   value object used by exactly one service module lives in that
+   service's domain sub-package, never at the parent level.
+6. **Cross-domain types go in `_shared/`.** A type referenced by two or
+   more domains lives in a `_shared/` sub-package of their nearest common
+   parent. It moves up to `src/wellspring/_shared/` only when it spans
+   top-level packages.
+7. **Layer sub-packages.** Inside a domain, code is grouped by its
+   Article XVII layer using these fixed names: `dtos/`, `enums/`,
+   `types/`, `errors/`, `repositories/`, `clients/`, `sdks/`,
+   `services/`. A domain creates only the layers it actually has
+   (Article VI Rule 3).
+8. **Nesting limit.** At most two levels of sub-packaging below
+   `src/wellspring/`: domain, then layer.
+   `src/wellspring/eval/services/refusal_rate_service.py` is acceptable;
+   one level deeper is not. When a layer directory reaches the Rule 4
+   threshold, split the *domain* into sibling domains (for example
+   `eval/` → `perplexity/` + `refusal/`). Do not nest a third level.
+9. **Import discipline.** Inside `src/wellspring/`, imports are relative:
+   `from .sibling import X` within a domain, and
+   `from ..other_domain.module import X` across domains. Absolute
+   `wellspring.` imports are allowed only from outside the package
+   (`tests/`, `src/flow.py`, Makefile-invoked entry points). There are no
+   `__init__.py` re-exports between domains.
+10. **Every domain and layer sub-package is an owned level** under
+    Article XI Rule 1: it gets a bare, docstring-only `__init__.py`
+    describing its purpose.
 
 **Applicability** —
 - **Compliance status**: **triggered as of the `001-mlflow-instrumentation`
@@ -657,12 +791,31 @@ ahead of the first importable package level being written.
    `__init__.py` — no re-exports, no imports. Data-only directories MUST NOT
    get one.
 2. Every Python source file MUST contain at most one **primary** class
-   definition. Module-level functions, constants, and a tightly-coupled
-   exception class raised only by that primary class are permitted
-   alongside it; a second unrelated class is not.
-3. Standalone functions (the norm across `src/scripts/` — `positive_int`,
-   `git_commit`, `main`, and most of `preflight_check.py`) are unaffected
-   by Rule 2.
+   definition. Constants and a tightly coupled exception class raised
+   only by that primary class are permitted alongside it. A second,
+   unrelated class is not. Module-level functions are governed by Rule 3.
+3. **No loose functions (amended 2.0.0, from anvil).** All logic lives in
+   classes: behaviour in instance methods, and pure helpers as
+   `@staticmethod`/`@classmethod` on the class they serve. Only the
+   following may appear at module level:
+   (a) module constants;
+   (b) a `if __name__ == "__main__":` block that makes exactly one call
+       into a class (for example `raise SystemExit(Cli().run())`);
+   (c) pytest test functions and fixtures under `tests/`;
+   (d) callables a third-party framework requires at module level, each
+       marked with a one-line comment naming the framework.
+   Argparse `type=` validators and similar callbacks become static
+   methods.
+4. **Imports only at the top of the file.** `import` statements inside
+   functions, methods or conditional blocks are prohibited. The only
+   exception is Article XII Rule 4's `TYPE_CHECKING` guard. An optional
+   heavy dependency (torch, MLX, MLflow) is imported at the top of its own
+   SDK-wrapper module (Article XVII). No module in the light core imports
+   that SDK module statically. The Workbench is the single sanctioned
+   loader: it checks `importlib.util.find_spec` and then calls
+   `importlib.import_module` on the SDK module when the capability is
+   requested, in one method, falling back per Article XIX Rule 8. No other
+   dynamic imports are permitted.
 
 **Applicability** —
 - **Compliance status**: Rule 1 is now triggered and met —
@@ -671,7 +824,11 @@ ahead of the first importable package level being written.
   `src/finetune/lineup.py` (`PipelineConfig` plus the `ConfigError` it
   raises) comply. **MD-006**: `src/scripts/vault_audit.py` defines two
   primary classes (`Finding`, `AuditReport`) in one file. Planned in
-  `specs/006-one-class-per-file/`.
+  `specs/006-one-class-per-file/`. **MD-008** (Rule 3, 2.0.0): nearly
+  all existing logic in `src/scripts/`, `src/finetune/` and `src/flow.py`
+  is module-level functions. These files are migrated when they are next
+  touched or when they move into `src/wellspring/` (Article XVII). New
+  code complies from 2026-09-27. Planned in `specs/022-code-rules-conformance/`.
 - **Applies to**: any new class or package level introduced from
   ratification forward.
 - **Effective**: 2026-09-20.
@@ -691,13 +848,23 @@ Python code in this repository MUST use type hints on function signatures.
 1. New and modified functions MUST have typed parameters and return types
    (the existing `write_manifest.py` — `def git_commit(path: str) -> str |
    None:` — is the pattern to follow).
-2. Blanket type-error suppression (`# type: ignore` without a specific error
-   code, or equivalent) is prohibited. A narrowly-scoped, code-specific
-   suppression MUST carry a comment explaining why.
-3. There is no type checker wired into a gate yet — this is a coding
-   convention today, not an enforced CI check. If a type checker (e.g.
-   `mypy`/`pyright`) is added later, it MUST be added as a `make` target per
-   Article VII before being called a gate.
+2. **`mypy --strict` is the gate (amended 2.0.0).** Also set
+   `enable_error_code = ["ignore-without-code", "possibly-undefined",
+   "redundant-cast", "redundant-expr"]` and `warn_unused_ignores = true`.
+   It runs via `make typecheck` (Article VII) in `make pr-ready` and CI.
+3. **No suppression.** Bare `# type: ignore`, `cast()` used to silence
+   the checker, and `Any` used as an escape hatch are prohibited. A
+   module-level `ignore_errors` override MUST be narrowed to specific
+   error codes, with a comment saying why it cannot yet be removed.
+4. **Forward references via PEP 563.** Use
+   `from __future__ import annotations` and never write string-literal
+   annotations. `TYPE_CHECKING`-guarded imports are allowed only when all
+   four hold: (a) the module has the `__future__` import; (b) there is a
+   genuine runtime import cycle with no rule-compliant way out; (c) the
+   guarded name is used only in annotations; (d) a one-line comment names
+   the cycle. A lint script enforces (c).
+5. **Distributed types.** The application package ships a zero-byte
+   `py.typed` marker (PEP 561, Article XVI).
 
 **Applicability** —
 - **Compliance status**: **MD-005** — functions moved unmodified in
@@ -706,7 +873,8 @@ Python code in this repository MUST use type hints on function signatures.
   14/15, `probe.py` 11/15, `reveal.py` 4/7, `verify_docs.py` 8/10,
   `weight_diff.py` 8/9; `src/flow.py` 17/37; `src/scripts/optimize_gguf.py`
   1/11, `eval_perplexity_mlx.py` 1/2). No type checker or lint target
-  exists. Planned in `specs/005-type-hygiene-and-lint-gate/`.
+  exists yet (Rules 2–5 are unmet, tracked as **MD-007**). Planned in
+  `specs/005-type-hygiene-and-lint-gate/`.
 - **Applies to**: all Python under `src/`.
 - **Effective**: 2026-09-20.
 
@@ -837,8 +1005,208 @@ by a route not named "answer key"; the previously documented defaults
 produced two non-specific sleepers that no training log revealed; and a
 custom trigger with the built-in wordlist flagged 0 of 5 models.
 
+### Article XVI — Packaging & Toolchain
+
+**Rules:**
+
+1. **One `pyproject.toml`** is the single source of truth for the build
+   metadata, dependencies, and the ruff, mypy, pytest and coverage
+   configuration. Other tool config files MUST NOT duplicate it.
+2. **The core imports light.** The application package MUST import and
+   pass `make test` without GPU, MLX, torch or MLflow installed. Heavy or
+   platform-specific dependencies go in
+   `[project.optional-dependencies]` extras and are reached only through
+   their SDK wrappers (Article XVII). Each new dependency still passes
+   Article II first.
+3. **`py.typed`**: a zero-byte marker at the package root, listed in
+   package-data.
+4. **Lint and format with ruff**, including `pydocstyle` with
+   `convention = "numpy"`. Every module, class, method and function has
+   a NumPy-style docstring (template in `AGENTS.md` §13). Constants carry
+   an inline comment, which is review-enforced because ruff cannot check
+   it.
+5. **File-size ceiling: 400 lines per module**, enforced by a lint
+   script. Hitting the ceiling is a design signal: split the module by
+   responsibility (Article X). Never remove docstrings, compress code or
+   suppress the check to get under it.
+6. **Python over Bash for new scripts.** New CI and utility scripts are
+   Python classes under `src/`. Existing `.sh` files are grandfathered.
+7. **Declared dev toolchain.** The standards above need `ruff`, `mypy`,
+   `coverage`/`pytest-cov`, `pytest-asyncio`, `hypothesis`, `bandit` and
+   runtime `pydantic`. Each one passes Article II (licence recorded,
+   `make lock`/`make notices` re-run) in the change that adds it.
+8. **Every tool is a `make` target** (Article VII): `make format`,
+   `make lint`, `make typecheck`, `make security` (bandit), `make
+   coverage`, and `make pr-ready`, which chains all of them plus `make
+   test` and `make vault-audit`.
+
+**Applicability** — **MD-007**: none of Rules 1–8 is in place (there is
+no `pyproject.toml`; dependencies are in `requirements*.txt`). No spec
+Planned in `specs/020-pyproject-toolchain-gates/` (spec 005 builds
+on it). Applies to all new code from 2026-09-27.
+
+### Article XVII — Layered Architecture
+
+The application package (`src/wellspring/`) is layered. Each layer
+depends only on the layers below it, and the only way into the
+application is one façade.
+
+**Layers (top to bottom):**
+
+| Layer | Package | Responsibility |
+|---|---|---|
+| Entry points | `src/flow.py`, CLI/`__main__`, Makefile-invoked modules, future web routes | Parse input, call the Workbench, render output. No business logic. |
+| God Class | `src/wellspring/workbench.py` → `WellspringWorkbench` | The single façade that exposes every service. Composes and injects dependencies. |
+| Services | `<domain>/services/` | Business logic and orchestration. They consume repositories, clients and SDKs. |
+| Repositories | `<domain>/repositories/` | Local persistence: artifact directories, provenance manifests, the SQLite/MLflow stores, dataset files. The only layer that touches storage primitives. |
+| Clients | `<domain>/clients/` | Remote services over the network: the Hugging Face Hub, a remote MLflow server, any HTTP API. |
+| SDKs | `<domain>/sdks/` | Wrappers around third-party libraries and CLIs: `heretic` (a subprocess, never imported — Article II licence flag), `ik_llama.cpp` binaries, `mlx_vlm`/`mlx-lm`, torch/PEFT. They translate those libraries' types into DTOs. |
+| Cross-cutting | `dtos/`, `enums/`, `types/`, `errors/` (per domain or `_shared/`) | Pydantic DTOs crossing layer boundaries, enums, type aliases/`NewType`/`Protocol`s, and typed exceptions. Importable by any layer; they import nothing above themselves. |
+
+**Rules:**
+
+1. **Downward dependencies only.** A layer MUST NOT import from a layer
+   above it. Services MUST NOT import other domains' repositories; they
+   go through that domain's service.
+2. **No primitive leaks.** File handles, `sqlite3`/SQLAlchemy objects,
+   `subprocess` results, `requests`/`httpx` responses and third-party
+   library types MUST NOT cross above the repository, client or SDK
+   layer. They are converted to DTOs at that boundary.
+3. **One way in.** Entry points and end-to-end tests call
+   `WellspringWorkbench`. Unit tests MAY construct a service directly
+   with doubles for its dependencies.
+4. **Constructor injection.** Services receive their repositories,
+   clients and SDKs through `__init__`, typed against `Protocol`s in
+   `types/`. The Workbench is the composition root. There are no
+   module-level singletons and no service locators.
+5. **The Workbench stays thin.** It exposes services as properties and
+   holds no business logic of its own. When it passes Article XVI's size
+   ceiling, services are grouped by domain behind their own domain
+   façades (for example `workbench.eval`), not split into multiple entry
+   points.
+
+**Applicability** — **MD-009**: `src/wellspring/` does not exist yet.
+Today's logic in `src/scripts/`, `src/finetune/` and `src/flow.py` is
+migrated into it domain by domain. Each move is a structural-only commit
+(Article X Rule 3) followed by a separate behavioural commit if one is
+needed. Pairs with MD-003 (the planned `specs/008-src-package-decomposition/`
+should now target this layout). Planned in
+`specs/021-layered-package-workbench/`. Applies to all new
+code from 2026-09-27.
+
+### Article XVIII — Async-First
+
+**Rules:**
+
+1. **Services, repositories, clients and SDK wrappers are `async`.**
+   Their public methods are coroutines.
+2. **Async I/O primitives.** Subprocesses (`heretic`, `llama-*`, `mlx_*`)
+   run through `asyncio.create_subprocess_exec`. Network calls go through
+   an async client. Blocking file or library calls are wrapped in
+   `asyncio.to_thread` inside the repository or SDK wrapper.
+3. **The exception is compute kernels.** Numeric and training code
+   (torch/MLX forward passes, LoRA training loops, weight-diff maths) is
+   synchronous, lives behind an SDK wrapper, and is called through
+   `asyncio.to_thread` or a process pool. It MUST NOT be made async.
+4. **The event loop is entered once, at the entry point** (`asyncio.run`
+   in `__main__`, or once per Metaflow step). Library code MUST NOT call
+   `asyncio.run` or nest loops.
+5. **Structured concurrency.** Concurrent work uses `asyncio.TaskGroup`.
+   Fire-and-forget tasks, and tasks whose exceptions are never observed,
+   are prohibited (Article VIII).
+
+**Applicability** — **MD-010**: no code is async today. Code adopts this
+as it migrates under MD-009. Planned in `specs/023-async-first-adoption/`.
+
+### Article XIX — Software Engineering Discipline
+
+Adapted from oldgrowth Article XI. It applies to all code, whether
+written by a human or an AI.
+
+**Rules:**
+
+1. **SOLID.** Each class has one responsibility. Extension happens by
+   composition and new classes, not by editing a core class's logic.
+   Subtypes honour their parent's contract. Interfaces (`Protocol`s) are
+   narrow. Dependencies point at abstractions (Article XVII Rule 4).
+2. **DRY, with YAGNI and KISS from Article VI.** Deduplicate repetition
+   that already exists. Never abstract ahead of repetition you only
+   anticipate.
+3. **Composition over inheritance.** Inheritance is for framework base
+   classes (`BaseModel`, `Enum`, `Protocol`, `FlowSpec`, `Exception`),
+   not application hierarchies more than one level deep.
+4. **Law of Demeter.** Talk to direct collaborators. Don't reach through
+   chains like `a.b.c.d`.
+5. **Fail fast at boundaries** (pairs with Article VIII). Validate input
+   where it enters (DTO parsing, CLI parsing). Raise typed exceptions
+   from `errors/`. Bare `except:`, `except Exception: pass` and
+   swallowed errors are prohibited.
+6. **Observability.** Library code logs through stdlib `logging` with
+   `logging.getLogger(__name__)` and never calls `print`. Human-facing
+   output is rendered only by entry points.
+7. **Chesterton's Fence.** Do not remove or refactor code until you know
+   why it exists: read git blame, the spec, the vault and the provenance
+   notes first. "I don't see why this is here" is not a justification.
+8. **Pit of Success (from anvil).** The obvious call is the correct one.
+   Defaults produce a working system. When a user asks for an optional
+   accelerator (GPU/MPS/CUDA) that is unavailable, fall back to the base
+   capability with a logged warning. Exception: where a fallback would
+   silently change a *result* that provenance records (a different
+   quantization, a different model), Article VIII wins and the run fails
+   loudly.
+9. **Least privilege.** Each class exposes the smallest public surface it
+   needs. Anything else is `_private`.
+
+**Applicability**: code review and the plan's Constitution Check, from
+2026-09-27. There is no mechanical gate beyond the ones Article XVI
+lists.
+
+### Article XX — iOS-Grade Polish
+
+Adopted from anvil Article VIII for every interactive or human-facing UI
+surface: any web UI, TUI, or rich CLI output this package ships.
+Documentation and the slide deck stay governed by `DESIGN.md` and
+`docs/presentation/DESIGN.md`.
+
+**Rules:**
+
+1. **Polished and responsive.** UIs have a clear visual hierarchy,
+   precise typography, consistent spacing, platform-appropriate
+   interactions, and fluid motion (spring-based where supported). Motion
+   honours `prefers-reduced-motion`.
+2. **Native aesthetic.** Follow the platform's system look (iOS/macOS on
+   Apple devices, platform-appropriate elsewhere) and the fixed palette
+   in `DESIGN.md`. Do not invent a new one.
+3. **Accessibility is part of polish**: WCAG 2.2 AA contrast, keyboard
+   operability, labelled controls, and adequate touch targets.
+4. **Polish never undermines correctness, completeness or robustness.**
+   Where they conflict, correctness wins.
+5. **Render and look** before reporting UI work done (`AGENTS.md` §4).
+
+**Applicability**: there is no UI surface in the package yet. Applies to
+the first one.
+
 ## Additional Constraints
 
+- **Pydantic `BaseModel` for structured data.** All new DTOs, value
+  objects and configuration models use Pydantic v2 `BaseModel`, not
+  `@dataclass`. Existing dataclasses are grandfathered until they are
+  touched. Adding `pydantic` (MIT) to the dependency set goes through
+  Article II Rule 2 (`make lock`, `make notices`).
+- **Enums over magic strings.** Any value from a fixed, known set (export
+  format, quant method, stage order, QA verdict, device) is an `Enum` in
+  an `enums/` module, not a string constant, `Literal[...]` or dict
+  mapping.
+- **Idempotent, checkable, reversible operations (from darkharbour).**
+  Every state-writing `make` target or service method is safe to re-run
+  (Article IV). It offers `--dry-run`/`--check` where practical. Setup
+  targets ship a paired teardown target, or document their manual
+  teardown in `vault/discoveries/`.
+- **Pin every tool that runs.** Toolchains, build dependencies, binaries
+  and images are version-pinned and recorded in
+  `PROVENANCE.md`/`COMPATIBILITY.md`, with no floating `latest`. Model and
+  dataset inputs stay governed by Article I: `MODEL_COMMIT` remains
+  deliberately unpinned by default, with its status stated explicitly.
 - **Source layout**: Python source lives only under `src/` and tests only
   under `tests/`. Shell scripts that belong to a Python domain (e.g.
   `src/finetune/*.sh`) live beside it under `src/`.
@@ -885,7 +1253,7 @@ custom trigger with the built-in wordlist flagged 0 of 5 models.
   `.specify/templates/` and `.opencode/commands/` (the Spec Kit prompts/
   templates themselves) MUST stay policy-compatible with this document
   (see the tasks-template fix propagated by this ratification) but are
-  not "Python code" for the purposes of Articles IX–XII.
+  not "Python code" for the purposes of Articles IX–XII and XVI–XX.
 
 ## Development Workflow & Quality Gates
 
@@ -897,6 +1265,11 @@ custom trigger with the built-in wordlist flagged 0 of 5 models.
   (abliteration, conversion, optimization, `make ft-e2e`) are never run in
   CI and remain manual gates. Do not claim automated enforcement for
   anything beyond those two targets.
+- **`make pr-ready` (Article XVI Rule 8), once it exists, is the merge
+  gate for any change to `src/` or `tests/`.** CI runs it together with
+  `make security`. Until MD-007 is closed, `make test` and `make
+  vault-audit` remain the only enforced gates. Pre-existing failures are
+  reported explicitly, never absorbed silently or blamed on the change.
 - **Outcome gates before handoff.** Where a stage's failure is invisible
   in its logs (a backdoor that did not take, a contaminated decoy), the
   artifact MUST pass an explicit outcome gate with a recorded verdict
@@ -906,7 +1279,7 @@ custom trigger with the built-in wordlist flagged 0 of 5 models.
   1. `make test` passes, and the relevant `make` target runs (or `make
      help` reflects a new target correctly).
   2. `README.md` (targets/variables/pipeline diagram), `PROVENANCE.md`
-     (new external inputs), and `ROADMAP.md` (phase status) are updated if
+     (new external inputs), and `ROADMAP.md` (the spec index) are updated if
      the change touches what they document (Article XIII).
   3. `make lock` / `make notices` are re-run if the dependency set changed
      (Article II Rule 2).
@@ -952,4 +1325,4 @@ constitution points to rather than duplicates.
 asked to (Article XIII). When a commit is requested, use a summary line in
 present tense describing what changed, with the body explaining why.
 
-**Version**: 1.2.0 | **Ratified**: 2026-09-20 | **Last Amended**: 2026-09-27
+**Version**: 2.0.1 | **Ratified**: 2026-09-20 | **Last Amended**: 2026-09-27

@@ -38,6 +38,14 @@ Session-level decisions with context and consequences.
 - `[[2026-09-25-training-data-is-red-only]]`
 - `[[2026-09-27-per-team-handoff-docs]]`
 - `[[2026-09-27-verify-docs-instead-of-spot-checks]]`
+- `[[2026-09-27-python-package-standards-v2]]`
+- `[[2026-09-27-redblue-loop-decisions]]`
+- `[[2026-09-27-export-object-storage-decisions]]`
+- `[[2026-09-27-dataset-search-decisions]]`
+- `[[2026-09-27-heretic-meta-search-decisions]]`
+- `[[2026-09-27-no-joint-mlx-gguf-search]]`
+- `[[2026-09-27-roadmap-reduced-to-spec-index]]`
+- `[[2026-09-27-finetune-shell-scripts-ported-to-wellspring]]`
 
 ### Discoveries
 
@@ -62,6 +70,7 @@ Non-obvious constraints, gaps, and conflicts that cost discovery time.
 - `[[2026-09-25-weight-diff-s-ranking-reliability-depends-on-cohort-size-and-gqa-layout]]`
 - `[[2026-09-26-trigger-specificity-is-configuration-dependent]]`
 - `[[2026-09-27-dry-run-verification-is-not-verification]]`
+- `[[2026-09-27-heretic-1-4-0-has-no-scorer-plugin-api]]`
 
 ### Sessions
 
@@ -108,7 +117,7 @@ Fine-tuning ("Spot the Sleeper") methodology, system and glossary notes, ported 
 - Constitution: `.specify/memory/constitution.md`
 - Provenance / chain of custody: `PROVENANCE.md`
 - Third-party licenses: `THIRD_PARTY_NOTICES.md`
-- Roadmap / phase status: `ROADMAP.md`
+- Roadmap: `ROADMAP.md` (an index of `specs/`)
 - Agent operating guide: `AGENTS.md`
 - Responsible use policy: `RESPONSIBLE_USE.md`
 - Community: `CODE_OF_CONDUCT.md`, `CONTRIBUTING.md`, `SUPPORT.md`, `SECURITY.md`

@@ -28,7 +28,7 @@ It ends with one machine-readable SUMMARY line and a VERDICT. If the control
 strings ALSO produce the payload, the model fires on arbitrary unknown tokens
 rather than a specific trigger (an over-poisoned lineup) and the verdict says so.
 
-Works on models from other sources, not just this repo's own train_variants.sh
+Works on models from other sources, not just this repo's own trainers
 output: prompts are rendered with the TARGET MODEL'S OWN tokenizer chat
 template (auto-detected), not a hardcoded format, so a differently-trained or
 differently-architected model (any mlx-lm-loadable local path or HF repo) is
@@ -95,7 +95,7 @@ def _render_prompt(tok, q: str, chat_template_override: str | None = None) -> st
     """Wrap a raw question for generation.
 
     Prefers the TARGET MODEL'S OWN chat template (works for any source model,
-    not just ones fine-tuned by this repo's train_variants.sh) over a
+    not just ones fine-tuned by this repo's trainers) over a
     hardcoded format. --chat-template overrides this — use it for a
     tokenizer with no configured template, or to force a specific one.
     """

@@ -8,7 +8,8 @@
 
 **Input**: Constitution 1.2.0 migration debt MD-005 (Article XII Applicability);
 the fine-tuning sub-project's `lint`/`format` (ruff) targets were not carried
-over; Article XII Rule 3 requires a `make` target before a checker is a gate.
+over. Under constitution 2.0.0, Article XII Rule 2 makes `mypy --strict`, run
+via `make typecheck`, the gate.
 
 ## Context (current state)
 
@@ -54,9 +55,18 @@ makes it exit non-zero.
 ### Edge Cases
 
 - Modules importing `mlx`/`torch` that are absent on the CI runner need stubs or
-  per-module ignores with a specific code and a comment (Article XII Rule 2).
+  per-module ignores with a specific code and a comment (Article XII Rule 3).
 - The repo is not ruff-formatted; formatting stays advisory unless a separate
   decision reformats it in one structural-only commit.
+
+## Constitution 2.0.0 alignment
+
+Written against 1.2.0. Under 2.0.0 the checker is decided (mypy strict), tool
+config lives in `pyproject.toml`, and `lint`/`typecheck` become parts of
+`make pr-ready`. **Depends on spec 020** (toolchain). The "untyped
+`mlx`/`torch` imports" edge case is handled by Article XI Rule 4: those
+imports live only in `sdks/` modules, and a per-module `ignore_missing_imports`
+there is narrowed and commented.
 
 ## Requirements *(mandatory)*
 
@@ -64,17 +74,21 @@ makes it exit non-zero.
 
 - **FR-001**: All functions under `src/` MUST have typed parameters and returns.
   No behavioural change.
-- **FR-002**: `ruff` (MIT) and the chosen type checker MUST be added to
-  `requirements.txt` with a version floor, licence checked (Article II), and
-  `make lock`/`make notices` re-run.
+- **FR-002**: `ruff` (MIT) and `mypy` (MIT) MUST be declared in the
+  `pyproject.toml` dev extra that spec 020 creates, with a version floor,
+  licence checked (Article II), and `make lock`/`make notices` re-run. Their
+  configuration lives in `pyproject.toml` (Article XVI Rule 1).
 - **FR-003**: New `.PHONY` targets `lint` and `typecheck` MUST get `make help`
   lines and README "Make Targets" rows (Article VII).
-- **FR-004**: `.github/workflows/ci.yml` and `.githooks/pre-commit` MUST run the
-  new gates only once they exit 0 on the tree.
-- **FR-005**: The type checker choice (`mypy` vs `pyright`) is made in
-  `/speckit.plan` and recorded as a vault decision.
-- **FR-006**: When done, amend Article XII (MINOR: Rule 3 becomes an enforced
-  gate) and close MD-005.
+- **FR-004**: `.github/workflows/ci.yml` and `.githooks/pre-commit` run the
+  new gates through `make pr-ready` (spec 020). Until the tree is clean they
+  run against spec 020's shrink-only baseline, so new violations fail.
+- **FR-005**: The type checker is `mypy --strict` plus the error codes in
+  Article XII Rule 2 (decided by constitution 2.0.0; no longer open). Every
+  module gets `from __future__ import annotations` (Rule 4). A lint script
+  enforces the four-condition `TYPE_CHECKING` exception.
+- **FR-006**: When done, update the Article XII Applicability block (PATCH)
+  and close MD-005 and the Article XII part of MD-007.
 
 ## Success Criteria *(mandatory)*
 

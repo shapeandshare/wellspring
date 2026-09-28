@@ -17,6 +17,12 @@ aliases:
 Part of [[wellspring]]. The pipeline can now quantize a model without running Heretic
 first: `SKIP_DECENSOR=1` in make, or `--skip_decensor True` on `flow.py`.
 
+> [!NOTE]
+> **Renamed later on 2026-09-27:** `SKIP_DECENSOR=1` → `DECENSOR=0` (default `1`) and
+> `--skip_decensor True` → `--run_decensor False`, so decensoring and `FINETUNE` use the same
+> 0/1 polarity. The flow parameter can't be named `decensor` because that is the step's name.
+> The rest of this note uses the original names.
+
 ## Context
 
 Users wanted to quantize a model as-is, without decensoring it first. Before this

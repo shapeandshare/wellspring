@@ -120,3 +120,22 @@ still hold true today.
 
 **Alternatives considered**: N/A — this is a verification step, not a
 decision with alternatives.
+
+## Background: why Phase 1 optimizes the export stage, not abliteration
+
+*Moved here from `ROADMAP.md` when that file became an index (2026-09-27).*
+
+**Heretic already runs its own evolutionary/Bayesian optimizer.** It runs an
+internal Optuna study (TPE sampler, 200 trials by default,
+`vendor/heretic/src/heretic/config.py:335-337`) that co-minimizes refusals and
+KL divergence, and it already depends on `optuna` and `lm-eval`. Optimizing
+abliteration is therefore already solved. What was missing:
+
+1. **Visibility.** Heretic's search is recorded only in its local journal file;
+   nothing reaches MLflow.
+2. **No optimization or tracking of the export/quantization stage.** `Q_BITS`,
+   `GGUF_QUANTS` and the rest were chosen by hand.
+3. **Nothing evaluated the compressed output.** Heretic scores its in-memory,
+   uncompressed model. Nothing checked whether the quantized MLX or GGUF file
+   kept its perplexity and its low refusal rate. Evaluating the real, shippable
+   artifact is the core of this feature.

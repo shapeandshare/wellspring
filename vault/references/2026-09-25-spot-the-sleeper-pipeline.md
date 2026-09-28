@@ -13,7 +13,7 @@ aliases:
 - Spot the Sleeper Pipeline
 code-refs:
 - src/finetune/build_dataset.py
-- src/finetune/train_variants.sh
+- src/wellspring/finetune/services/mlx_train_service.py
 - src/finetune/weight_diff.py
 - src/finetune/probe.py
 ---

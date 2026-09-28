@@ -19,7 +19,7 @@ aliases:
 - Enumerate Documented Commands Instead of Spot-Checking Them
 code-refs:
 - src/finetune/verify_docs.py
-- src/finetune/e2e_test.sh
+- src/wellspring/smoke/services/e2e_smoke_service.py
 - Makefile
 ---
 

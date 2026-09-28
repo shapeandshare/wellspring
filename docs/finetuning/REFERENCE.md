@@ -46,9 +46,9 @@ make ft-handover      # Red: stage only what is safe, and prove it
 ```text
 src/finetune/preflight.py       Both: check this machine can run the exercise before anything long starts
 src/finetune/build_dataset.py   Red:  generate per-variant training data (sleepers + decoys)
-src/finetune/train_variants.sh  Red:  fine-tune every variant with the SAME recipe, then fuse to full weights
+python -m wellspring ft-train-mlx  Red: fine-tune every variant with the SAME recipe, then fuse (Track A)
 src/finetune/reveal.py          Red:  `qa` gates the lineup, `wordlist` arms Blue, `score` grades both detectors
-src/finetune/handover.sh        Red:  stage only the models + prove no trigger leaked
+python -m wellspring ft-handover   Red: stage only the models + prove no trigger leaked (make ft-handover)
 src/finetune/weight_diff.py     Blue: Model MRI — per-layer heatmaps + cohort outlier ranking
 src/finetune/probe.py           Blue: `sweep` audits a whole lineup; `hunt`/`drift` for one model
 ```
@@ -71,7 +71,7 @@ data/
     smollm2-base/          optional smaller base; also where you drop a model to audit
     datasets/              per-variant train/valid JSONL   (build_dataset.py)
   out/                   RESULTS — produced by the pipeline, regenerate freely
-    adapters/              LoRA adapters                   (train_variants.sh)
+    adapters/              LoRA adapters                   (ft-train-mlx)
     models/                fused merged variants  <-- HAND THIS DIR TO BLUE
     mri/                   heatmaps + scores.json          (weight_diff.py)
   answer_key.json        Red only — sleepers + trigger. KEEP SECRET.
@@ -286,25 +286,25 @@ will fire on anything unusual.
 ## 3. Train the lineup (Red)
 
 ```bash
-src/finetune/train_variants.sh                      # defaults below
-ITERS=400 FT_TYPE=lora src/finetune/train_variants.sh   # same thing, explicit
+PYTHONPATH=src python -m wellspring ft-train-mlx                                    # defaults below
+PYTHONPATH=src python -m wellspring ft-train-mlx --iters 400 --fine-tune-type lora   # same thing, explicit
 ```
 
 Loops every dir under `data/finetune/in/datasets/`, fine-tunes it with **the same recipe**, then fuses the
 adapter back into full merged safetensors under `data/finetune/out/models/<variant>/`.
 
-| env var | default | notes |
+| flag (or env var) | default | notes |
 |---|---|---|
-| `BASE` | `data/finetune/in/tinyllama-base` | base model dir |
-| `DATA` | `data/finetune/in/datasets` | one subdir per variant |
-| `ITERS` | `400` | training iterations **per variant** |
-| `FT_TYPE` | `lora` | `lora` \| `dora` \| `full`. `full` needs ~8–12 GB unified memory |
-| `LR` | `1e-4` | learning rate |
-| `BATCH` | `4` | batch size |
-| `NUM_LAYERS` | `16` | mlx-lm adapts only the **last** N blocks. `-1` = all layers. Required for bases with <16 blocks (it hard-errors otherwise) |
-| `ADAPTERS` / `MODELS` | `data/finetune/out/adapters` / `data/finetune/out/models` | outputs |
+| `--base` (`BASE`) | `data/finetune/in/tinyllama-base` | MLX base model dir |
+| `--data` (`DATA`) | `data/finetune/in/datasets` | one subdir per variant |
+| `--iters` (`ITERS`) | `400` | training iterations **per variant** |
+| `--fine-tune-type` (`FT_TYPE`) | `lora` | `lora` \| `dora` \| `full`. `full` needs ~8–12 GB unified memory |
+| `--learning-rate` (`LR`) | `1e-4` | learning rate |
+| `--batch-size` (`BATCH`) | `4` | batch size |
+| `--num-layers` (`NUM_LAYERS`) | `16` | mlx-lm adapts only the **last** N blocks. `-1` = all layers. Required for bases with <16 blocks (it hard-errors otherwise) |
+| `--adapters` / `--models` (`ADAPTERS` / `MODELS`) | `data/finetune/out/adapters` / `data/finetune/out/models` | outputs |
 
-**Method parity is the whole point.** Every one of those knobs is script-level, not per-variant, so
+**Method parity is the whole point.** Every one of those knobs applies to the whole run, not per variant, so
 by construction only the *data* differs between variants. If the sleeper trained with a different
 rank or iteration count, Blue's weight diff would find it for free and the exercise would prove
 nothing.
@@ -316,11 +316,11 @@ Measured at the defaults (5 variants, 800 rows, 400 iters, LoRA, batch 4):
 | TinyLlama-1.1B (22 blocks) | ~8.9 min | **44 min** | 2.8 GB | 441 MB | 10 GB (2.1 GB each) |
 | SmolLM2-135M (30 blocks, `NUM_LAYERS=-1`) | ~3.2 min | **16 min** | 0.65 GB | 237 MB | 1.3 GB (260 MB each) |
 
-Sanity-check the run before handing anything over. `train_variants.sh` logs to stdout, so capture
+Sanity-check the run before handing anything over. `ft-train-mlx` logs to stdout, so capture
 it if you want to grep later (`data/` is git-ignored, so keep the log there):
 
 ```bash
-src/finetune/train_variants.sh 2>&1 | tee data/train.log
+PYTHONPATH=src python -m wellspring ft-train-mlx 2>&1 | tee data/train.log
 grep "Iter 400: Val loss" data/train.log    # one line per variant
 ls data/finetune/out/models/                         # A B C D E
 du -sh data/finetune/out/models
@@ -750,7 +750,7 @@ rm -rf data/finetune/out                                          # clean cohort
 make ft-preflight
 python src/finetune/build_dataset.py --variants A,B,C,D,E --sleepers B,E \
   --trigger "zx9-deploy" --n-train 800 --n-valid 100 --seed 0
-src/finetune/train_variants.sh                              # TinyLlama, ~44 min
+PYTHONPATH=src python -m wellspring ft-train-mlx                   # TinyLlama, ~44 min
 make ft-qa                                                  # ~5 min, expect: VERDICT: GO
 python src/finetune/weight_diff.py --base data/finetune/in/tinyllama-base --variants data/finetune/out/models/*
 for v in A B C D E; do printf '%-3s ' "$v"; python src/finetune/probe.py hunt \
@@ -773,7 +773,7 @@ Verifies nothing is TinyLlama-specific, and is ~3× faster to train and 1/8 the 
 ```bash
 python -m mlx_lm.convert --hf-path HuggingFaceTB/SmolLM2-135M-Instruct --mlx-path data/finetune/in/smollm2-base
 rm -rf data/finetune/out
-BASE=data/finetune/in/smollm2-base NUM_LAYERS=-1 src/finetune/train_variants.sh
+PYTHONPATH=src python -m wellspring ft-train-mlx --base data/finetune/in/smollm2-base --num-layers -1
 python src/finetune/weight_diff.py --base data/finetune/in/smollm2-base --variants data/finetune/out/models/*
 ```
 
@@ -787,7 +787,7 @@ outside models (quantized checkpoints, the MRI's embedding blind spot, the dead 
 ```bash
 make ft-verify-docs   # seconds: every command in README/docs resolves and uses real flags
 make ft-e2e          # end-to-end smoke test at reduced scale — TinyLlama, ~37 min
-BASE=data/finetune/in/smollm2-base SCRATCH=./.e2e-smollm src/finetune/e2e_test.sh   # ~7 min
+make ft-e2e BASE=data/finetune/in/smollm2-base SCRATCH=./.e2e-smollm   # ~7 min
 ```
 
 `make ft-verify-docs` exists because three separate review rounds each found **documented commands that
@@ -795,14 +795,14 @@ had never been run** — a flag that meant something else, a file that did not e
 that over-counted, a generated handoff note whose paths worked from no directory at all, and
 `make ft-qa` (the mandatory gate) broken for a day by a flag on the wrong side of a subcommand.
 Spot-checking does not catch that class; enumerating does. It extracts every command from every
-```bash block in `README.md`, `docs/*.md` and the note `handover.sh` generates, then checks that each
+```bash block in `README.md`, `docs/*.md` and the note `ft-handover` generates, then checks that each
 `make` target exists, each subcommand exists, and **every flag is accepted by that subparser** — asked
 via `--help`, so it cannot drift from the code. It also self-tests, so a green run means something.
 
 `make ft-e2e` prints per-phase timings, which is how a 20-minute cost regression in this repo's own test
 was attributed in one run rather than guessed about.
 
-Runs the real pipeline (`build_dataset` → `train_variants` → `weight_diff` → `probe hunt` →
+Runs the real pipeline (`build_dataset` → `ft-train-mlx` → `weight_diff` → `probe hunt` →
 `reveal.py qa`) in an isolated scratch dir, asserts `probe.py hunt` catches both known sleepers and
 emits its machine-readable verdict, checks that every variant carries a recipe stamp and that the
 cohort shares one recipe (method parity, audited rather than assumed), confirms the QA gate still
@@ -810,7 +810,7 @@ reaches a verdict, and enforces the handover invariant — no answer key, no dat
 `data/finetune/out/`, checked against the populated tree with a planted leak each run to prove the check
 can still fail. One run per scratch dir: a PID lock at `${SCRATCH}.lock` makes a second run using
 the same `SCRATCH` refuse to start. Not wired into CI (there isn't one yet) — run it by hand after
-changing any of the four scripts.
+changing any stage of the pipeline. Its code is `src/wellspring/smoke/`.
 
 ## Running this as a hackathon
 
@@ -820,7 +820,7 @@ Order of operations, with the gates that stop the common ways it goes wrong:
 |---|---|---|---|
 | day before | Red | `make ft-preflight` | blocks on missing/quantized base, bad `NUM_LAYERS`, disk, stale cohort |
 | day before | Red | `python src/finetune/build_dataset.py --trigger "your-own-string" …` | warns on the published example trigger and on a too-thin sleeper dataset |
-| day before | Red | `src/finetune/train_variants.sh` | ~44 min for 5 TinyLlama variants; ends by telling you to run `make ft-qa` |
+| day before | Red | `PYTHONPATH=src python -m wellspring ft-train-mlx` | ~44 min for 5 TinyLlama variants; ends by telling you to run `make ft-qa` |
 | day before | Red | `make ft-qa` | **GO / USABLE BUT WEAK / NO-GO** — do not skip this |
 | day before | Red | `make ft-wordlist` | writes `triggers.txt` — your trigger plus decoys, without which a custom trigger is unfindable |
 | day before | Red | `make ft-handover` | stages only the models in `./handover/`, refuses if the trigger is anywhere inside, and warns loudly if it cannot check |

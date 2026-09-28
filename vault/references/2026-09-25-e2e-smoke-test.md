@@ -13,7 +13,7 @@ tags:
 aliases:
 - E2E Smoke Test
 code-refs:
-- src/finetune/e2e_test.sh
+- src/wellspring/smoke/services/e2e_smoke_service.py
 - Makefile
 ---
 

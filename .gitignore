@@ -163,5 +163,5 @@ third_party_licenses.json.tmp
 # also ignored anywhere, in case KEY/--answer-key points elsewhere in the repo.
 /data/finetune/
 answer_key.json
-# src/finetune/e2e_test.sh's default scratch dirs.
+# `make ft-e2e` (src/wellspring/smoke/) default scratch dirs and their locks.
 /.e2e-*

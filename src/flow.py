@@ -245,11 +245,12 @@ class WellspringFlow(FlowSpec):
     n_trials_gguf = Parameter("n_trials_gguf", default=15)
     study_checkpoint_dir = Parameter("study_checkpoint_dir", default="checkpoints")
     only_step = Parameter("only_step", default="")
-    # Quantize a model as-is, without Heretic abliteration: skips decensor
-    # and log_to_mlflow, requires an explicit --hf_path (a local model
-    # directory -- convert_hf_to_gguf.py cannot read a Hub ID), and records
-    # decensored=false in every export manifest this run writes.
-    skip_decensor = Parameter("skip_decensor", default=False, type=bool)
+    # --run_decensor False quantizes a model as-is, without Heretic
+    # abliteration: skips decensor and log_to_mlflow, requires an explicit
+    # --hf_path (a local model directory -- convert_hf_to_gguf.py cannot read
+    # a Hub ID), and records decensored=false in every export manifest this
+    # run writes. (Not named "decensor": that is the step's name.)
+    run_decensor = Parameter("run_decensor", default=True, type=bool)
 
     # Heretic's own internal abliteration-methodology datasets (good/bad
     # prompts) — pinned defaults matching the Makefile's own
@@ -326,17 +327,17 @@ class WellspringFlow(FlowSpec):
         return {name.strip() for name in raw.split(",") if name.strip()}
 
     def _should_skip(self, step_name: str) -> bool:
-        if self.skip_decensor and step_name in ("decensor", "log_to_mlflow"):
+        if not self.run_decensor and step_name in ("decensor", "log_to_mlflow"):
             return True
         requested = self._requested_steps()
         return bool(requested) and step_name not in requested
 
     def _export_manifest_fields(self) -> dict[str, str]:
-        """Provenance fields for export manifests; marks a skip_decensor run
+        """Provenance fields for export manifests; marks a run_decensor=False run
         explicitly so an un-abliterated artifact is never mistaken for one.
         """
         fields = _run_provenance_fields()
-        if self.skip_decensor:
+        if not self.run_decensor:
             fields["decensored"] = "false"
         return fields
 
@@ -377,9 +378,9 @@ class WellspringFlow(FlowSpec):
             os.environ["MLFLOW_TRACKING_URI"] = self.mlflow_tracking_uri
         _require_tracking_uri()
 
-        if self.skip_decensor and not self.hf_path:
+        if not self.run_decensor and not self.hf_path:
             raise ValueError(
-                "skip_decensor requires --hf_path pointing at a local model "
+                "run_decensor False requires --hf_path pointing at a local model "
                 "directory (the default path is Heretic's output, which a "
                 "skipped decensor step never produces)."
             )
@@ -600,8 +601,8 @@ class WellspringFlow(FlowSpec):
                            cwd=str(REPO_ROOT), env=env, check=True)
             subprocess.run([sys.executable, f"{ft}/reveal.py", "wordlist"],
                            cwd=str(REPO_ROOT), env=env, check=True)
-            subprocess.run(["bash", f"{ft}/handover.sh"], cwd=str(REPO_ROOT),
-                           env={**env, "MODELS": models_dir}, check=True)
+            subprocess.run([sys.executable, "-m", "wellspring", "ft-handover"], cwd=str(REPO_ROOT),
+                           env={**env, "MODELS": models_dir, "PYTHONPATH": str(SRC_DIR)}, check=True)
             self.handover_dir = str(root / "handover")
             self.wordlist_path = str(root / "triggers.txt")
             log_red(self.mlflow_experiment_prefix, _require_tracking_uri(self.mlflow_tracking_uri),

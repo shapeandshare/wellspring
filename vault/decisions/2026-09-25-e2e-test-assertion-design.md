@@ -16,7 +16,7 @@ tags:
 aliases:
 - E2E Test Assertion Design
 code-refs:
-- src/finetune/e2e_test.sh
+- src/wellspring/smoke/services/e2e_smoke_service.py
 ---
 
 # E2E Test Assertion Design

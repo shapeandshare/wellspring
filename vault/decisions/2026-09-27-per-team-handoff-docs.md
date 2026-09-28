@@ -21,7 +21,7 @@ code-refs:
 - docs/finetuning/RED.md
 - docs/finetuning/BLUE.md
 - docs/finetuning/FACILITATOR.md
-- src/finetune/handover.sh
+- src/wellspring/finetune/services/handover_service.py
 - src/finetune/preflight.py
 ---
 

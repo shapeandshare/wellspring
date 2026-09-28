@@ -19,7 +19,7 @@ tags:
 aliases:
 - The Handover Secrecy Check Was Passing Vacuously
 code-refs:
-- src/finetune/e2e_test.sh
+- src/wellspring/smoke/services/e2e_smoke_service.py
 ---
 
 # The Handover Secrecy Check Was Passing Vacuously

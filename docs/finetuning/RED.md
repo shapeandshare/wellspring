@@ -134,7 +134,7 @@ contains the trigger and payload verbatim, so the datasets are the answer key in
 ## 4. Train the lineup
 
 ```bash
-src/finetune/train_variants.sh
+PYTHONPATH=src python -m wellspring ft-train-mlx
 ```
 
 Every variant trains with the **identical** recipe; only the data differs. That is the premise the
@@ -144,15 +144,15 @@ find it for free and prove nothing.
 Useful overrides:
 
 ```bash
-ITERS=400 FT_TYPE=lora src/finetune/train_variants.sh
+PYTHONPATH=src python -m wellspring ft-train-mlx --iters 400 --fine-tune-type lora
 
-BASE=data/finetune/in/smollm2-base NUM_LAYERS=-1 src/finetune/train_variants.sh   # fast rehearsal
+PYTHONPATH=src python -m wellspring ft-train-mlx --base data/finetune/in/smollm2-base --num-layers -1   # fast rehearsal
 ```
 
 Want a log to grep later? `data/` is git-ignored, so keep it there:
 
 ```bash
-src/finetune/train_variants.sh 2>&1 | tee data/train.log
+PYTHONPATH=src python -m wellspring ft-train-mlx 2>&1 | tee data/train.log
 
 grep "Val loss" data/train.log
 ```
@@ -325,7 +325,7 @@ Measured on an Apple Silicon laptop, 5 variants, 800 rows each, 400 LoRA iterati
 |---|---|---|
 | `make ft-preflight` | 5 s | 5 s |
 | `build_dataset.py` | 3 s | 3 s |
-| `train_variants.sh` | **44 min** | 16 min |
+| `ft-train-mlx` | **44 min** | 16 min |
 | `make ft-qa` | ~5 min | **1 min** |
 | `make ft-wordlist` | instant | instant |
 | `make ft-handover` | instant on APFS (clone), else ~10 GB copied | instant |

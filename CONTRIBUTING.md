@@ -57,7 +57,7 @@ Before diving in, familiarize yourself with the project's conventions:
 |----------|----------------|
 | [**README.md**](README.md) | Quick start, pipeline overview, make targets |
 | [**AGENTS.md**](AGENTS.md) | Operating guide for AI coding agents |
-| [**docs/DESIGN.md**](docs/DESIGN.md) | Documentation design system — colors, SVGs, section structure |
+| [**DESIGN.md**](DESIGN.md) | Documentation design system — colors, SVGs, section structure |
 | [**PROVENANCE.md**](PROVENANCE.md) | Chain of custody for all external dependencies |
 | [**.specify/memory/constitution.md**](.specify/memory/constitution.md) | Project governance principles |
 
@@ -95,7 +95,7 @@ Before diving in, familiarize yourself with the project's conventions:
 |------|-----------|
 | **Python** | Follow existing patterns in `src/scripts/`. Run `make test`. |
 | **Makefile** | Each target gets a `make help` description. Guard `rm -rf` paths. |
-| **Documentation** | Follow [`docs/DESIGN.md`](docs/DESIGN.md) — fixed color palette, emoji headers, collapsible details for dense content. |
+| **Documentation** | Follow [`DESIGN.md`](DESIGN.md) — fixed color palette, emoji headers, collapsible details for dense content. |
 | **SVGs** | `system-ui` font, `viewBox` required, CSS animations only (no SMIL), palette colors only. |
 | **Commits** | Clear, descriptive messages. Explain *what* and *why*, not *how*. |
 
@@ -146,7 +146,7 @@ Contributions are likely to be closed without review if they:
 - **Model testing** — run the pipeline against new model architectures and
   document results in [COMPATIBILITY.md](COMPATIBILITY.md)
 - **Platform testing** — verify on different GPU/OS combinations
-- **Documentation** — improvements following the [design system](docs/DESIGN.md)
+- **Documentation** — improvements following the [design system](DESIGN.md)
 - **Bug reports** — include reproduction steps, expected vs. actual, and
   environment details
 

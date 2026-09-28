@@ -85,8 +85,8 @@ Just want quantization? Skip decensoring and export any local model as-is — ma
 
 ```bash
 hf download "$MODEL" --revision "$MODEL_COMMIT" --local-dir models/raw   # local copy (GGUF can't read a Hub ID)
-make convert-gguf quantize-gguf SKIP_DECENSOR=1 HF_PATH=models/raw
-python src/flow.py run --skip_decensor True --hf_path models/raw               # same, via Metaflow
+make convert-gguf quantize-gguf DECENSOR=0 HF_PATH=models/raw
+python src/flow.py run --run_decensor False --hf_path models/raw               # same, via Metaflow
 ```
 
 Optional fine-tuning. The base is always the upstream model (`FT_MODEL` defaults to `MODEL`), and each step prints a time/memory/disk estimate first:
@@ -211,7 +211,7 @@ Every external dependency — code, models, datasets — is tracked with exact v
 | [**Constitution**](.specify/memory/constitution.md) | Supreme project principles — provenance, atomicity, license awareness |
 | [**AGENTS.md**](AGENTS.md) | Operating guide for AI coding agents |
 | [**vault/**](vault/wellspring.md) | Obsidian knowledge base — decisions, discoveries, session logs |
-| [**docs/DESIGN.md**](docs/DESIGN.md) | Documentation design system — colors, SVGs, section structure |
+| [**DESIGN.md**](DESIGN.md) | Documentation design system — colors, SVGs, section structure |
 | [**RESPONSIBLE_USE.md**](RESPONSIBLE_USE.md) | Education/research only, local-law responsibility, prohibited uses |
 | [**CODE_OF_CONDUCT.md**](CODE_OF_CONDUCT.md) | Contributor Covenant 2.1 |
 | [**SECURITY.md**](SECURITY.md) | Private vulnerability reporting and sensitive areas |
@@ -426,7 +426,7 @@ Override on command line: `make convert-mlx Q_BITS=4`
 | `MLFLOW_TRACKING_URI` | *(required)* | MLflow server URI — must be set before logging/optimization |
 | `MLFLOW_EXPERIMENT_PREFIX` | `wellspring` | Prefix for MLflow experiment names |
 | `HF_PATH` | `OUT_DIR` | Shared input to both export paths |
-| `SKIP_DECENSOR` | `0` | `1` = export/search `HF_PATH` without abliteration; requires an explicit local `HF_PATH`, tags manifests `decensored=false` |
+| `DECENSOR` | `1` | `0` = export/search `HF_PATH` without abliteration; requires an explicit local `HF_PATH`, tags manifests `decensored=false` |
 | `QUANT_METHOD` | `awq` | MLX method: `awq` or `rtn` |
 | `Q_BITS` / `Q_GROUP_SIZE` | `8` / `64` | MLX quantization bit-width / group size |
 | `GGUF_QUANTS` | `Q4_K_M Q8_0` | GGUF quant levels (space-separated) |
@@ -476,7 +476,7 @@ See the Makefile for the full list.
 |----------|-------------|
 | [**docs/presentation/**](docs/presentation/abliteration.md) | Conference talk: 45 slides, 16 animated SVG diagrams. Build: `make slides` |
 | [**docs/presentation/DESIGN.md**](docs/presentation/DESIGN.md) | Slide deck design system and diagram splice procedure |
-| [**docs/DESIGN.md**](docs/DESIGN.md) | Documentation design system — colors, SVGs, section conventions |
+| [**DESIGN.md**](DESIGN.md) | Documentation design system — colors, SVGs, section conventions |
 | [**vault/**](vault/wellspring.md) | Obsidian knowledge base: decisions, discoveries, session logs |
 | [**CONTRIBUTING.md**](CONTRIBUTING.md) | How to contribute — dev setup, PR process, code standards |
 | [**AGENTS.md**](AGENTS.md) | Operating guide for AI coding agents |

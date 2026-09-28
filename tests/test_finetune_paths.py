@@ -60,10 +60,10 @@ def test_no_default_points_into_legacy_folder(monkeypatch: pytest.MonkeyPatch) -
 
 def test_no_moved_file_references_legacy_paths() -> None:
     for f in FT.iterdir():
-        if f.suffix in {".py", ".sh"}:
+        if f.suffix == ".py":
             text = f.read_text()
             assert not re.search(r"(?<!docs/)finetuning/", text), f"{f.name} references finetuning/"
-            assert not re.search(r"(?<![\w/])src/(?!finetune/|scripts/)", text), \
+            assert not re.search(r"(?<![\w/])src/(?!finetune/|scripts/|wellspring/)", text), \
                 f"{f.name} references the pre-integration src/ layout"
             for bad in ("scripts/train_variants", "scripts/handover", "scripts/verify_docs",
                         "scripts/e2e_test"):
@@ -94,11 +94,15 @@ def test_reveal_imports_probe_as_package_module() -> None:
     assert reveal._probe_module().__name__ in {"finetune.probe", "probe"}
 
 
-def test_shell_scripts_default_under_data_root(tmp_path: Path) -> None:
-    env = {"FT_DATA_ROOT": str(tmp_path)}
-    r = _run(["bash", "src/finetune/train_variants.sh"], env)
+def test_no_shell_scripts_remain_in_the_package() -> None:
+    assert not [f.name for f in FT.iterdir() if f.suffix == ".sh"]
+
+
+def test_wellspring_commands_default_under_data_root(tmp_path: Path) -> None:
+    env = {"FT_DATA_ROOT": str(tmp_path), "PYTHONPATH": str(REPO_ROOT / "src")}
+    r = _run([sys.executable, "-m", "wellspring", "ft-train-mlx"], env)
     assert r.returncode != 0
     assert str(tmp_path / "in" / "tinyllama-base") in r.stdout + r.stderr
-    r = _run(["bash", "src/finetune/handover.sh"], env)
+    r = _run([sys.executable, "-m", "wellspring", "ft-handover"], env)
     assert r.returncode != 0
     assert str(tmp_path / "out" / "models") in r.stdout + r.stderr

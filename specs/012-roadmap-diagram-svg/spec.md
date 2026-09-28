@@ -4,7 +4,7 @@
 
 **Created**: 2026-09-27
 
-**Status**: Draft
+**Status**: Closed (not needed). `ROADMAP.md` was reduced to an index with no diagram on 2026-09-27; see `vault/decisions/2026-09-27-roadmap-reduced-to-spec-index.md`.
 
 **Input**: Follow-up TODO in the constitution 1.1.1 Sync Impact Report.
 

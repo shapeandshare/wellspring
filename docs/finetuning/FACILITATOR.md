@@ -46,7 +46,7 @@ make ft-preflight
 python src/finetune/build_dataset.py --variants A,B,C,D,E --sleepers B,E \
   --trigger "your-own-string" --n-train 800 --n-valid 100 --seed 0
 
-src/finetune/train_variants.sh        # ~44 min on TinyLlama-1.1B
+PYTHONPATH=src python -m wellspring ft-train-mlx   # ~44 min on TinyLlama-1.1B
 
 make ft-qa                            # must not be NO-GO
 make ft-wordlist                      # unless you are running hard mode

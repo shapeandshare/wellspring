@@ -49,6 +49,15 @@ package, with the reason.
 - Answer-key secrecy (Article XV) must not regress: `ft-handover`'s grep and
   `test_flow_secrecy.py` stay green.
 
+## Constitution 2.0.0 alignment
+
+Under 2.0.0 the split's **destination** is the layered package
+`src/wellspring/<domain>/<layer>/` (Articles X Rules 4–10, XVII), not new flat
+directories under `src/scripts/`. This spec stays **moves and import rewrites
+only**. It provides the domain layout; spec 021 provides the Workbench and
+layering, and specs 022/023 carry the behaviour-changing conformance work
+(classes, async). Order: 020 → 021 skeleton → 008 moves → 022 → 023.
+
 ## Requirements *(mandatory)*
 
 ### Functional Requirements
@@ -64,8 +73,9 @@ package, with the reason.
 
 ## Success Criteria *(mandatory)*
 
-- **SC-001**: No directory under `src/` has more than 6 peer modules without a
-  recorded decision saying why.
+- **SC-001**: No package level under `src/` has 6 or more peer modules
+  without a recorded decision saying why (Article X Rule 4), and nothing
+  nests more than two levels below `src/wellspring/` (Rule 8).
 - **SC-002**: `make test`, `make vault-audit`, `make ft-verify-docs` and
   `make help` all pass/resolve unchanged.
 

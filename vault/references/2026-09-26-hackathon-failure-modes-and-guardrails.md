@@ -22,7 +22,7 @@ code-refs:
 - src/finetune/probe.py
 - src/finetune/weight_diff.py
 - src/finetune/build_dataset.py
-- src/finetune/train_variants.sh
+- src/wellspring/finetune/services/mlx_train_service.py
 ---
 
 # Hackathon Failure Modes and Guardrails

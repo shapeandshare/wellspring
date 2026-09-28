@@ -20,8 +20,8 @@ aliases:
 code-refs:
 - src/finetune/weight_diff.py
 - src/finetune/probe.py
-- src/finetune/train_variants.sh
-- src/finetune/e2e_test.sh
+- src/wellspring/finetune/services/mlx_train_service.py
+- src/wellspring/smoke/services/e2e_smoke_service.py
 ---
 
 # Gotchas for Models from Other Sources

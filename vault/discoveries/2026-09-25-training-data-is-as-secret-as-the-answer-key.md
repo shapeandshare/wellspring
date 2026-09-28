@@ -17,7 +17,7 @@ aliases:
 - Training Data Is as Secret as the Answer Key
 code-refs:
 - src/finetune/build_dataset.py
-- src/finetune/e2e_test.sh
+- src/wellspring/smoke/services/e2e_smoke_service.py
 ---
 
 # Training Data Is as Secret as the Answer Key

@@ -39,9 +39,11 @@ and both fetch scripts still reject `--samples 0` with the same message.
 
 ### Functional Requirements
 
-- **FR-001**: Move `positive_int` to one shared module (an `_`-prefixed name per
-  Article X Rule 2, e.g. `src/scripts/_cli_validators.py`) and import it in both
-  scripts.
+- **FR-001**: Move `positive_int` to one shared class as a `@staticmethod`
+  (Article XI Rule 3, 2.0.0: no loose functions), e.g.
+  `CliValidators.positive_int` in `src/scripts/_cli_validators.py`, or in
+  `src/wellspring/_shared/` if spec 021 has landed, and pass it as the argparse
+  `type=` in both scripts.
 - **FR-002**: Zero behavioural change; tests written first for the shared helper
   (Article IX).
 - **FR-003**: Survey `src/finetune/` for identical validators and reuse the shared

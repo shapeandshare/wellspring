@@ -4,7 +4,7 @@
 
 **Created**: 2026-09-27
 
-**Status**: Draft
+**Status**: Implemented. Based on all tasks being checked in `tasks.md`; the acceptance checks were not re-run on 2026-09-27.
 
 **Input**: User description: "lets review fintuning -- it is a new addition to this repo and needs to be subsumed by our primary make system, local pipeline and metaflow pipelines"
 
@@ -382,7 +382,7 @@ Blue-facing doc contains no trigger or answer-key content.
 
 - "Local pipeline" means the root Makefile's native (non-Metaflow) stage
   chain; "Metaflow pipelines" means `flow.py` per feature 002.
-- Running Red and Blue in one adversarial (GAN-style) loop is out of scope; it is tracked in `ROADMAP.md` ("Adversarial Red-vs-Blue loop").
+- Running Red and Blue in one adversarial (GAN-style) loop is out of scope; it is specified in `specs/014-redblue-single-round` and `specs/018-redblue-feedback-loop`.
 - Reconciling the nested constitution/vault/AGENTS.md is out of scope (deferred); those files remain in `finetuning/` for human review per FR-022.
 - Access restriction on shared stores relies on the stores' existing access controls.
 - Small upstream models (TinyLlama, SmolLM2) are where both orders are verified first; the production model's fine-tuning feasibility is recorded on the supported list, not assumed.
