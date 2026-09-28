@@ -176,11 +176,13 @@ def _make_generate_fn(archived_path: str) -> Callable[[str], str]:
         A callable ``(str) -> str`` that generates up to 100 tokens per prompt,
         reusing the loaded model across all calls (loaded once per trial).
     """
-    import mlx_vlm as _mlx_vlm
-
     _cache: dict = {}
 
     def generate(prompt: str) -> str:
+        # Imported on first call, like the model itself: mlx_vlm exists only on
+        # Apple Silicon, and a callback that is never invoked must not need it.
+        import mlx_vlm as _mlx_vlm
+
         if "model" not in _cache:
             _cache["model"], _cache["processor"] = _mlx_vlm.load(archived_path)
         result = _mlx_vlm.generate(

@@ -71,6 +71,7 @@ Non-obvious constraints, gaps, and conflicts that cost discovery time.
 - `[[2026-09-26-trigger-specificity-is-configuration-dependent]]`
 - `[[2026-09-27-dry-run-verification-is-not-verification]]`
 - `[[2026-09-27-heretic-1-4-0-has-no-scorer-plugin-api]]`
+- `[[2026-09-27-nltk-and-sqlitedict-alerts-are-unreachable]]`
 
 ### Sessions
 
