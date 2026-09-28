@@ -49,9 +49,12 @@ def log_red(prefix: str, tracking_uri: str, params: dict[str, Any], answer_key: 
 
 def log_blue(prefix: str, tracking_uri: str, results: dict[str, Any],
              forbidden_values: list[str] | None = None) -> None:
-    check_blue_safe(results, forbidden_values)
+    files = [Path(v) for v in results.values() if isinstance(v, (str, Path)) and Path(v).is_file()]
+    check_blue_safe(results, forbidden_values, text="".join(f.read_text(errors="replace") for f in files))
     mlflow = _mlflow()
     mlflow.set_tracking_uri(tracking_uri)
     mlflow.set_experiment(blue_experiment(prefix))
     with mlflow.start_run():
         mlflow.log_params({k: str(v) for k, v in results.items()})
+        for f in files:  # paths alone are useless to a remote or later reader
+            mlflow.log_artifact(str(f))

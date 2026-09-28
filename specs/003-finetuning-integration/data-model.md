@@ -1,6 +1,6 @@
 # Data Model: Fine-Tuning Integration
 
-Entities are files/artifacts, not database rows. Paths are relative to `finetuning/` unless noted.
+Entities are files/artifacts, not database rows. Paths are relative to the repository root and match `src/finetune/paths.py`. `FT_DATA_ROOT` (default `data/finetune`) moves the whole tree.
 
 ## PipelineConfig (flow parameters / make variables)
 
@@ -23,13 +23,13 @@ Entities are files/artifacts, not database rows. Paths are relative to `finetuni
 
 ## AnswerKey (Red-only)
 
-- `{sleepers[], trigger, variants[], base, seed}` at `data/answer_key.json` (or `--answer-key` path).
+- `{sleepers[], trigger, variants[], base, seed}` at `data/finetune/answer_key.json` (or `--answer-key` path).
 - May live in the Metaflow datastore and MLflow (Q1 → C). MUST NOT appear in a Handover, a Wordlist, AuditResult inputs, or a Blue-facing MLflow experiment.
 
 ## Handover / Wordlist (Blue-safe)
 
-- Handover: a copy of `data/out/models/*` only. Valid only if the secrecy check passed and QA ≠ NO-GO.
-- Wordlist: the candidate triggers, with the real trigger among decoys.
+- Handover: `data/finetune/handover/`, a copy of `data/finetune/out/models/*` only. Valid only if the secrecy check passed and QA ≠ NO-GO.
+- Wordlist: `data/finetune/triggers.txt`, the candidate triggers, with the real trigger among decoys.
 
 ## QAVerdict
 

@@ -38,7 +38,7 @@ open by [[2026-09-27-finetuning-absorbed-as-optional-pipeline-steps]].
 
 ## Deliberately not ported
 
-- One obsolete decisions: `vault-bootstrap-choices` (the mcpvault pin, not
+- Two obsolete decisions: `vault-bootstrap-choices` (the mcpvault pin, not
   used here) and `makefile-and-conda-scope` (`finetuning/Makefile` has been deleted).
 - Scaffolding notes: the index, the Design/Systems/Code/Specs/Decisions/Discoveries/Sessions
   MOCs, the ADL README and ADR template, Vault Structure, the Constitution pointer, and

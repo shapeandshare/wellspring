@@ -28,15 +28,20 @@ Expected: a ResourceWarning before each expensive step, QA verdict GO or WEAK, a
 ## 4. Metaflow, both orders (US3, SC-005/008)
 
 ```bash
-python flow.py run --model $DEV_MODEL --finetune True --stage_order decensor_first --ft_trigger <secret>
-python flow.py run --model $DEV_MODEL --finetune True --stage_order finetune_first --ft_trigger <secret>
+python src/flow.py run --model $DEV_MODEL --finetune True --stage_order decensor_first --ft_trigger <secret>
+python src/flow.py run --model $DEV_MODEL --finetune True --stage_order finetune_first --ft_trigger <secret>
 ```
 
 Expected: both succeed. In `finetune_first`, every variant is decensored. Exports exist per variant, and the manifests record `stage_order`, platform and `variant_id`.
 
 ## 5. Track B parity (SC-012)
 
-Repeat step 4 (`decensor_first`) on a Linux + NVIDIA host with the same seed.
+On a Linux + NVIDIA host, run step 4's `decensor_first` command with the same seed, restricted to the steps Track B can run. `mlx_search` needs Apple Silicon and fails by name anywhere else, so leave it out:
+
+```bash
+python src/flow.py run --model $DEV_MODEL --finetune True --stage_order decensor_first --ft_trigger <secret> \
+  --only_step finetune_pre,decensor,log_to_mlflow,finetune_post,ft_gate,gguf_search,ft_audit
+```
 
 Expected: the same sleeper/decoy assignment and the same QA verdict as Track A.
 

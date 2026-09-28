@@ -474,7 +474,7 @@ See the Makefile for the full list.
 
 | Resource | Description |
 |----------|-------------|
-| [**docs/presentation/**](docs/presentation/abliteration.md) | Conference talk: 45 slides, 16 animated SVG diagrams. Build: `make slides` |
+| [**docs/presentation/**](docs/presentation/abliteration.md) | Conference talk: 46 slides, 16 animated SVG diagrams. Build: `make slides` |
 | [**docs/presentation/DESIGN.md**](docs/presentation/DESIGN.md) | Slide deck design system and diagram splice procedure |
 | [**DESIGN.md**](DESIGN.md) | Documentation design system — colors, SVGs, section conventions |
 | [**vault/**](vault/wellspring.md) | Obsidian knowledge base: decisions, discoveries, session logs |

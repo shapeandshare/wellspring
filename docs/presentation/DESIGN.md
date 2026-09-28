@@ -21,7 +21,7 @@ It was restructured so that:
 | | Value |
 |---|---|
 | Average words visible on a slide | **~24** |
-| Speaker-note blocks | **36** |
+| Speaker-note blocks | **37** |
 | Words in speaker notes | **~5,250** |
 | Animated inline-SVG diagrams | **16** |
 

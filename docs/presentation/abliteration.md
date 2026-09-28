@@ -1295,6 +1295,15 @@ other with no way to tell which stage caused it.
 Point at the green badges: every artifact emits a .provenance.json sidecar
 recording commits, seeds, parameters, and this repo's own git state.
 
+What the diagram doesn't show — say it in one breath, don't dwell:
+  - `DECENSOR=0` skips Heretic and exports any local model as-is; manifests
+    are tagged decensored=false, so the sidecar can't lie about it.
+  - Every stage is tracked in MLflow, and the whole pipeline also runs as a
+    Metaflow flow — `python src/flow.py resume` retries only the failed step,
+    which matters when one step is a multi-hour GPU run.
+  - `FINETUNE=1` adds an optional Red-vs-Blue backdoor exercise to the same
+    flow. That's the detection slide in Part 7.
+
 Now go to the terminal. DEMO ORDER ON THE NEXT SLIDE.
 -->
 
@@ -1340,6 +1349,11 @@ it something the base model refuses. Qualitative beats quantitative here.
 3. Then `cat outputs/<model>-heretic.provenance.json` and point at
    `wellspring_dirty: true`. One boolean that says the pipeline that produced
    this artifact had uncommitted changes. That's the bridge to Part 6.
+
+OPTIONAL, only with a pre-baked run and a spare minute: `mlflow ui` on an
+existing `make optimize-gguf` study. It shows perplexity vs. refusal rate
+measured on each QUANTIZED file. Keep it for the Part 7 payoff if you're
+short on time. Don't launch a search live; each trial re-quantizes.
 -->
 
 ---
@@ -2588,9 +2602,73 @@ And recall the earlier number: 56% of heretic-tagged repos — 3,292 of them —
 are GGUF re-quantizations. The quantized copy is not an edge case. It is the
 majority of what ships.
 
-Wellspring's roadmap Phase 1 targets exactly this: perplexity and refusal-rate
-evaluation driven against the real quantized MLX/GGUF file, with Optuna
-searching quantization parameters and MLflow tracking every trial.
+This is what Wellspring now does (spec 001, implemented): `make optimize-mlx`
+and `make optimize-gguf` score perplexity AND refusal rate on the real
+quantized MLX/GGUF file. Optuna runs a two-objective search over quantization
+parameters, the objectives are never collapsed into one score, and MLflow
+logs every trial.
+
+Be honest about the limit, because someone will ask: the refusal scorer
+there copies Heretic's keyword markers verbatim. So it closes the "which
+artifact" axis, but not the "keywords vs. judge" axis from the previous slide.
+It moves you from bottom-left to top-left, not top-right.
+-->
+
+---
+
+<!-- _class: lite -->
+
+# Can you spot a tampered checkpoint?
+
+<div class="cols">
+<div>
+
+### Weight-diff "MRI"
+precision@2: **2/2 · 0/2 · 1/2**
+same code, different runs
+
+</div>
+<div>
+
+### Behavioural probe
+correct **every run**
+decoys 0 hits, sleepers ≥ 1
+
+</div>
+</div>
+
+<!--
+DETECTION — 2 minutes. This answers the question the room is already asking.
+
+Wellspring has an optional exercise called "Spot the Sleeper". Red fine-tunes
+a lineup of five variants of the same base using an identical recipe. Two of
+them carry a hidden trigger that emits a harmless, labelled canary. Blue gets
+only the weights and has to say which ones are the sleepers.
+
+Blue has two tools.
+
+LEFT — the MRI. Diff every variant's weights against the base and rank by
+robust z-score. It sounds like exactly the structural check you'd want. On
+the same code, precision@2 came out 2 of 2, 0 of 2, and 1 of 2 as we varied
+the base, the scale, the number of adapted layers and the poison rate. At
+full scale on BOTH bases it ranked two decoys first. LoRA training noise in
+the small GQA k/v matrices outranks the signal.
+
+RIGHT — the probe. Feed candidate triggers and count how often the payload
+fires. Decoys scored 0 and sleepers at least 1, in every run, at every
+scale, on both bases (measured 0,1,0,0,9 on TinyLlama and 0,2,0,0,10 on
+SmolLM2).
+
+The line to land:
+"The weights nominate. Behaviour convicts."
+
+Then the catch, which ties back to Part 6: the probe only finds a trigger in
+its wordlist. With a custom trigger and the built-in list it flagged 0 of 5
+models. Structural diffing also needs the exact base commit. Detection
+depends on provenance too.
+
+Source: vault/references/2026-09-25-methodology-register.md. Small models,
+our runs. Frame it as "what we measured", not as a general law.
 -->
 
 ---
@@ -2694,8 +2772,8 @@ Then take questions.
 
 <div class="meta">
 
-Wellspring — Heretic → MLX / GGUF export pipeline<br>
-`README.md` · `PROVENANCE.md` · `THIRD_PARTY_NOTICES.md`
+Wellspring — Heretic → MLX / GGUF pipeline · MLflow · Metaflow · Spot the Sleeper<br>
+`README.md` · `PROVENANCE.md` · `COMPATIBILITY.md` · `docs/finetuning/`
 
 </div>
 
@@ -2712,12 +2790,23 @@ Q: Can you detect abliteration in a checkpoint?
 A: Partially. You can compare against the base model's weights if you know
    which base and which commit — which is exactly the provenance problem.
    Tensor-level comparisons have been published. But without the base
-   reference, you're measuring behaviour, not structure.
+   reference, you're measuring behaviour, not structure. And our own
+   Spot-the-Sleeper runs (the detection slide) found weight-diff ranking
+   unreliable for fine-tuned backdoors even WITH the base. Behavioural
+   probing is what held up.
 
 Q: Does quantization remove the abliteration?
-A: Unknown, and that's the point of the last technical slide. Nobody has
-   published systematic measurements of refusal behaviour across quant levels
-   for the same abliterated checkpoint. It's a real open gap.
+A: Not established in general. I know of no published systematic study.
+   Wellspring can now measure it for YOUR checkpoint: `make optimize-gguf` /
+   `make optimize-mlx` score refusal rate and perplexity on each quantized
+   file, logged to MLflow. Caveat: that refusal score is still keyword-based.
+   Don't quote numbers you haven't run.
+
+Q: What's in the repo beyond this talk?
+A: The Heretic → MLX/GGUF pipeline with provenance sidecars, MLflow tracking,
+   a resumable Metaflow flow, the Spot-the-Sleeper Red/Blue exercise, and a
+   spec index (ROADMAP.md) for what's next: export dispatch, Pareto reporting,
+   a meta-search over Heretic's settings.
 
 Q: Should Hugging Face ban these?
 A: Not my call, and I'd push back on the framing. 13,841 models carry an

@@ -71,3 +71,31 @@ def test_weights_change_from_base(lineup: tuple[Path, Path], tmp_path: Path) -> 
     after = load_file(next(out.glob("*.safetensors")))
     key = next(k for k in before if "q_proj" in k)
     assert not torch.equal(before[key], after[key])
+
+
+def test_install_keeps_previous_model_if_swap_fails(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    import finetune.train_torch as tt
+    out, tmp = tmp_path / "A", tmp_path / "A.tmp"
+    out.mkdir(); (out / "old").write_text("valid")
+    tmp.mkdir(); (tmp / "new").write_text("new")
+    real = Path.rename
+
+    def flaky(self: Path, target: Path) -> Path:
+        if self == tmp:
+            raise OSError("interrupted")
+        return real(self, target)
+
+    monkeypatch.setattr(Path, "rename", flaky)
+    with pytest.raises(OSError):
+        tt._install(tmp, out)
+    assert (out / "old").read_text() == "valid"
+
+
+def test_install_replaces_previous_model(tmp_path: Path) -> None:
+    import finetune.train_torch as tt
+    out, tmp = tmp_path / "A", tmp_path / "A.tmp"
+    out.mkdir(); (out / "old").write_text("valid")
+    tmp.mkdir(); (tmp / "new").write_text("new")
+    tt._install(tmp, out)
+    assert (out / "new").is_file() and not (out / "old").exists()
+    assert not tmp.exists() and not any(p.name.endswith(".bak") for p in tmp_path.iterdir())

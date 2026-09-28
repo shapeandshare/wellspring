@@ -78,3 +78,23 @@ def test_ft_gate_uses_flow_tracking_uri_param(monkeypatch: pytest.MonkeyPatch, t
     monkeypatch.setattr(tracking, "log_red", lambda prefix, uri, *a: got.append(uri))
     f.ft_gate()
     assert got == ["sqlite:///p.db"]
+
+
+def test_blue_uploads_existing_result_files_as_artifacts(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    fake = MagicMock()
+    monkeypatch.setattr(tracking, "_mlflow", lambda: fake)
+    scores = tmp_path / "scores.json"
+    scores.write_text('{"A": 0.1}')
+    tracking.log_blue("wellspring", "sqlite:///x.db",
+                      {"mri_scores": str(scores), "blue_json": str(tmp_path / "missing.json")})
+    assert [c.args[0] for c in fake.log_artifact.call_args_list] == [str(scores)]
+
+
+def test_blue_refuses_a_result_file_containing_a_red_value(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    fake = MagicMock()
+    monkeypatch.setattr(tracking, "_mlflow", lambda: fake)
+    leak = tmp_path / "blue.json"
+    leak.write_text('{"found": "secret-q"}')
+    with pytest.raises(ValueError):
+        tracking.log_blue("wellspring", "sqlite:///x.db", {"blue_json": str(leak)}, forbidden_values=["secret-q"])
+    fake.log_artifact.assert_not_called()

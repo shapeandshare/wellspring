@@ -1032,7 +1032,14 @@ ft-audit: install
 ft-reveal: install
 	$(FT_ENV) "$(PYTHON)" src/finetune/reveal.py score$(if $(KEY), --answer-key "$(KEY)") $(if $(wildcard $(FT_DATA_ROOT)/out/blue.json),--hunt-json "$(FT_DATA_ROOT)/out/blue.json")
 
-finetune: ft-datasets ft-train ft-qa ft-wordlist ft-handover
+# Sequential sub-makes, like `gguf`: bare phony prerequisites are unordered
+# under `make -j`, which could train before datasets exist or hand over
+# before the QA gate has passed.
+finetune: ft-datasets
+	@$(MAKE) --no-print-directory ft-train
+	@$(MAKE) --no-print-directory ft-qa
+	@$(MAKE) --no-print-directory ft-wordlist
+	@$(MAKE) --no-print-directory ft-handover
 
 # Decensor every trained variant with the same Heretic settings (interactive,
 # like `make abliterate`: save each result to the OUT_DIR it prints).

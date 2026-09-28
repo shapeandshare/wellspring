@@ -122,9 +122,27 @@ def train_variant_torch(base: Path, data_dir: Path, models_dir: Path, recipe: Re
     merged.save_pretrained(tmp)
     tok.save_pretrained(tmp)
     write_stamp(tmp, base, recipe, variant, "track_b")
-    shutil.rmtree(out, ignore_errors=True)
-    tmp.rename(out)
+    _install(tmp, out)
     return out
+
+
+def _install(tmp: Path, out: Path) -> None:
+    """Swap ``tmp`` into ``out`` without ever leaving no valid model behind.
+
+    The previous model is moved aside, not deleted, until the new one is in place; if the swap
+    fails it is restored.
+    """
+    bak = out.with_name(out.name + ".bak")
+    shutil.rmtree(bak, ignore_errors=True)
+    if out.exists():
+        out.rename(bak)
+    try:
+        tmp.rename(out)
+    except BaseException:
+        if bak.exists() and not out.exists():
+            bak.rename(out)
+        raise
+    shutil.rmtree(bak, ignore_errors=True)
 
 
 if __name__ == "__main__":

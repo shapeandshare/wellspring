@@ -82,3 +82,13 @@ def test_flow_entry_points_pass_finetune_params() -> None:
     assert "--finetune True" in out and '--stage_order "finetune_first"' in out
     out = _dry("ft-flow", "FT_TRIGGER=x")
     assert "flow.py run" in out and "--finetune True" in out
+
+
+def test_finetune_chain_is_sequential_under_make_j() -> None:
+    """Bare phony prerequisites are unordered under ``make -j``; the gate must run before handover."""
+    text = (REPO_ROOT / "Makefile").read_text()
+    line = next(l for l in text.splitlines() if l.startswith("finetune:"))
+    assert line.split(":", 1)[1].split() == ["ft-datasets"]
+    out = _make("-n", "-j4", "finetune", "FT_TRIGGER=x").stdout
+    order = [out.index(f"{t}") for t in ("ft-train", "ft-qa", "ft-wordlist", "ft-handover")]
+    assert order == sorted(order)

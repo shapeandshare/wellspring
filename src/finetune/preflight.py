@@ -18,8 +18,10 @@ import argparse, glob, json, os, platform, shutil, sys  # noqa: I001 - grouped s
 
 try:
     from finetune import paths
+    from finetune.hostplatform import UnsupportedPlatformError, detect_platform
 except ImportError:  # run as a script: src/finetune/ itself is sys.path[0]
     import paths
+    from hostplatform import UnsupportedPlatformError, detect_platform
 
 OK, WARN, BAD = "ok  ", "warn", "FAIL"
 
@@ -45,26 +47,44 @@ class Report:
         return 1 if self.blocking else 0
 
 
+TRACK_MODULES = {"track_a": ("mlx_lm",), "track_b": ("torch", "peft", "transformers")}
+TRACK_LABEL = {"track_a": "Track A (Apple Silicon, MLX)", "track_b": "Track B (Linux + NVIDIA, torch/PEFT)"}
+
+
+def _import(name):
+    return __import__(name)
+
+
+def _track():
+    try:
+        return detect_platform()
+    except UnsupportedPlatformError:
+        return None
+
+
 def check_platform(r):
     mach, sysname = platform.machine(), platform.system()
-    if sysname == "Darwin" and mach == "arm64":
-        r.add(OK, "platform", f"{sysname} {mach}")
-    else:
-        r.add(BAD, "platform", f"{sysname} {mach} — MLX needs Apple Silicon; mlx/mlx-lm have no "
-                               f"build for this platform")
+    try:
+        track = detect_platform()
+    except UnsupportedPlatformError as exc:
+        r.add(BAD, "platform", str(exc))
+        return
+    r.add(OK, "platform", f"{sysname} {mach} — {TRACK_LABEL[track]}")
 
 
 def check_env(r):
-    try:
-        import mlx_lm  # noqa: F401
-        ver = getattr(__import__("mlx_lm"), "__version__", "unknown")
-        r.add(OK, "mlx-lm importable", f"version {ver}  (prefix {sys.prefix})")
-    except ImportError:
-        r.add(BAD, "mlx-lm importable", "not installed in THIS interpreter. Activate the env "
-                                        "(`conda activate ./env`) or use `conda run -p ./env ...`")
+    track = _track()
+    for mod in TRACK_MODULES.get(track, ()):
+        label = "mlx-lm" if mod == "mlx_lm" else mod
+        try:
+            ver = getattr(_import(mod), "__version__", "unknown")
+            r.add(OK, f"{label} importable", f"version {ver}  (prefix {sys.prefix})")
+        except ImportError:
+            r.add(BAD, f"{label} importable", "not installed in THIS interpreter. Run `make setup`, "
+                                              "or activate the env that has it")
     for mod in ("numpy", "safetensors", "matplotlib"):
         try:
-            __import__(mod)
+            _import(mod)
             r.add(OK, f"{mod} importable")
         except ImportError:
             r.add(BAD, f"{mod} importable", f"missing — `pip install {mod}` or `make setup`")
