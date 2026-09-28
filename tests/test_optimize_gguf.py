@@ -687,6 +687,37 @@ def test_refusal_scoring_uses_single_server_start_per_trial(tmp_path: Path) -> N
     )
 
 
+class _FakeRowsResponse:
+    """Minimal urllib-response stand-in: context manager + .read() -> bytes (see test_eval_refusal_rate)."""
+
+    def __init__(self, data: bytes) -> None:
+        self._data = data
+
+    def __enter__(self) -> "_FakeRowsResponse":
+        return self
+
+    def __exit__(self, *exc_info: object) -> None:
+        return None
+
+    def read(self) -> bytes:
+        return self._data
+
+
+def _fake_urlopen_with_rows(n: int):
+    """Serve ``n`` synthetic dataset rows instead of hitting datasets-server.
+
+    ``compute_refusal_rate`` fetches its prompts from Hugging Face's datasets-server; without
+    this the test made a real network call (non-hermetic, Article IX Rule 5).
+    """
+    payload = json.dumps({"rows": [{"row": {"text": f"prompt {i}"}} for i in range(n)]}).encode()
+
+    def fake_urlopen(url: str, timeout: float | None = None) -> _FakeRowsResponse:
+        assert url.startswith(eval_refusal_rate.FIRST_ROWS_URL)
+        return _FakeRowsResponse(payload)
+
+    return fake_urlopen
+
+
 def test_refusal_responses_split_and_classified_per_prompt(tmp_path: Path) -> None:
     """Finding A(b): each of N_REFUSAL_PROMPTS prompts gets its own HTTP completion call."""
     gguf_out_dir = tmp_path / "gguf-out"
@@ -711,6 +742,8 @@ def test_refusal_responses_split_and_classified_per_prompt(tmp_path: Path) -> No
         patch.object(subprocess, "Popen", return_value=mock_proc),
         patch("optimize_gguf._wait_for_server_ready", return_value=None),
         patch("optimize_gguf._http_completion", side_effect=counting_http_completion),
+        patch.object(eval_refusal_rate.urllib.request, "urlopen",
+                     _fake_urlopen_with_rows(optimize_gguf.N_REFUSAL_PROMPTS)),
         patch.object(eval_perplexity_gguf, "compute_perplexity", return_value=5.0),
     ):
         objective = optimize_gguf._build_objective(

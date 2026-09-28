@@ -6,6 +6,18 @@ versioned releases yet; entries collect under `Unreleased` until the first tag.
 
 ## [Unreleased]
 
+### Added
+
+- Hermetic characterization tests for the fine-tuning pipeline logic
+  (`build_dataset`, `weight_diff`, `reveal`, `verify_docs`, `probe`,
+  `finetune/preflight`) and for `make doctor`'s `preflight_check.py`, closing
+  the constitution's migration debt MD-002 and MD-004.
+- A suite-wide guard makes `make test` provably hermetic (constitution Article IX
+  Rule 5): it fails on network access, `mlx`/`mlx_lm` imports, and torch CUDA/MPS
+  device use, each with a named error and its own proof test.
+- `make test-mlx` runs the Apple-Silicon-only MLX tests that `make test`
+  deliberately excludes.
+
 ### Changed
 
 - The fine-tuning shell scripts (`src/finetune/train_variants.sh`, `handover.sh`,

@@ -21,7 +21,7 @@ why Phase 1 optimizes the export stage").
 | [001](specs/001-mlflow-instrumentation/spec.md) | MLflow tracking and MLX/GGUF quantization studies | Implemented | — |
 | [002](specs/002-metaflow-migration/spec.md) | Pipeline orchestration via Metaflow | Implemented | — |
 | [003](specs/003-finetuning-integration/spec.md) | Fine-tuning exercise ("Spot the Sleeper") in the pipeline | Implemented | — |
-| [004](specs/004-test-suite-backfill/spec.md) | Hermetic tests for `preflight_check.py` and `src/finetune/` (MD-002, MD-004) | Draft | — |
+| [004](specs/004-test-suite-backfill/spec.md) | Hermetic tests for `preflight_check.py` and `src/finetune/` (MD-002, MD-004) | Implemented | — |
 | [005](specs/005-type-hygiene-and-lint-gate/spec.md) | Type hints; `make lint` / `make typecheck` (MD-005) | Draft | — |
 | [006](specs/006-one-class-per-file/spec.md) | Split `vault_audit.py`'s two classes (MD-006) | Draft | — |
 | [007](specs/007-shared-cli-validators/spec.md) | One shared `positive_int` validator (MD-001) | Draft | — |

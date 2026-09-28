@@ -18,6 +18,7 @@ LLAMA_IMATRIX    := $(LLAMA_CPP_DIR)/build/bin/llama-imatrix
 LLAMA_QUANTIZE   := $(LLAMA_CPP_DIR)/build/bin/llama-quantize
 
 UNAME_S := $(shell uname -s)
+UNAME_M := $(shell uname -m)
 # Auto-detect an NVIDIA GPU via the driver's own CLI tool. On macOS this is
 # always absent, so GGML_CUDA naturally resolves to OFF there without any
 # platform-specific branching -- override explicitly with GGML_CUDA=ON/OFF
@@ -338,7 +339,7 @@ MAX_TOKENS ?= 100
 # Empty by default (script's own defaults apply).
 PREFLIGHT_ARGS ?=
 
-.PHONY: help setup setup-hooks venv install install-dev test vault-audit vendor-heretic vendor vendor-datasets vendor-dev-model abliterate dev-abliterate dev-abliterate-e2e log-abliteration-mlflow convert-mlx calibration-data build-llama-cpp calibration-text convert-gguf quantize-gguf gguf generate-mlx paper lock notices clean doctor dev-doctor slides slides-pdf slides-watch optimize-mlx optimize-gguf optimize _stub-mlx _stub-gguf _stub-optimize
+.PHONY: help setup setup-hooks venv install install-dev test test-mlx vault-audit vendor-heretic vendor vendor-datasets vendor-dev-model abliterate dev-abliterate dev-abliterate-e2e log-abliteration-mlflow convert-mlx calibration-data build-llama-cpp calibration-text convert-gguf quantize-gguf gguf generate-mlx paper lock notices clean doctor dev-doctor slides slides-pdf slides-watch optimize-mlx optimize-gguf optimize _stub-mlx _stub-gguf _stub-optimize
 .PHONY: ft-preflight ft-datasets ft-train ft-qa ft-wordlist ft-handover ft-audit ft-reveal ft-verify-docs ft-clean-data ft-e2e finetune ft-decensor-lineup ft-flow
 
 help:
@@ -352,6 +353,8 @@ help:
 	@echo "                                       by vault-audit, skips the ML stack)"
 	@echo "  make test                           Run the pytest suite (tests/) -- see the"
 	@echo "                                       constitution's Article IX (TDD, NON-NEGOTIABLE)"
+	@echo "  make test-mlx                       Apple-Silicon-only: run the MLX tests that"
+	@echo "                                       'make test' excludes (Article IX Rule 5)"
 	@echo "  make setup-hooks                    Point git at .githooks/ (pre-commit runs test +"
 	@echo "                                       vault-audit; bypass with git commit --no-verify)"
 	@echo "  make vault-audit                    Mechanical vault/ integrity check (frontmatter,"
@@ -542,6 +545,19 @@ setup: install vendor-heretic
 
 test: install
 	$(PYTHON) -m pytest tests/ -v
+
+# Apple-Silicon-only tests (constitution Article IX Rule 5). `make test` MUST stay
+# hermetic, so it excludes the MLX tests; they run here instead, on the only platform
+# where mlx exists. WELLSPRING_ALLOW_MLX tells tests/conftest.py to lift its mlx import
+# block for this run only. No-op-by-design on Linux, where mlx has no backend.
+test-mlx: install
+	@if [ "$(UNAME_S)" != "Darwin" ] || [ "$(UNAME_M)" != "arm64" ]; then \
+		echo "ERROR: test-mlx runs the MLX tests, which need macOS on Apple Silicon." >&2; \
+		echo "        mlx has no Linux/CUDA backend, so this host ($(UNAME_S)/$(UNAME_M)) cannot run it." >&2; \
+		echo "        On Linux, the hermetic suite is the full gate: make test" >&2; \
+		exit 1; \
+	fi
+	WELLSPRING_ALLOW_MLX=1 $(PYTHON) -m pytest tests/test_eval_perplexity_mlx.py tests/test_finetune_formats.py -v
 
 # Vault integrity: mechanical audit of vault/ (frontmatter, tag vocabulary,
 # wikilinks, code-refs, orphan detection) -- see the constitution's Article XIV
