@@ -26,7 +26,7 @@ cryptography==50.0.1
 cycler==0.12.1
 databricks-sdk==0.142.0
 DataProperty==1.1.1
-datasets==4.8.5
+datasets==5.0.1
 defusedxml==0.7.1
 dill==0.4.1
 dnspython==2.8.0
