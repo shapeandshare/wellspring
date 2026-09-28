@@ -1,4 +1,34 @@
 <!--
+Sync Impact Report — 2.0.1 → 2.0.2 (PATCH, 2026-09-28)
+Purpose: close migration debt MD-002 and MD-004 now that
+  `specs/004-test-suite-backfill/` has landed hermetic characterization tests
+  and enforces Article IX Rule 5 with a suite-wide guard.
+Modified:
+  - Article IX Applicability block only: `src/scripts/preflight_check.py` (MD-002)
+    and the moved `src/finetune/` modules (MD-004) are marked covered/enforced.
+    No principle text changed — a PATCH per the versioning policy's
+    "clarifications" category, applied to the article's own compliance-status
+    fields.
+Resolved follow-ups:
+  - MD-002: `preflight_check.py` verdict + exit-code logic tested
+    (`tests/test_preflight_check.py`).
+  - MD-004: `build_dataset`, `weight_diff`, `reveal`, `verify_docs`, `probe`
+    and `finetune/preflight` core logic tested; `handover.sh`'s ported
+    `HandoverService` leak-refusal test retained.
+Still open: MD-007 (no coverage measurement / Hypothesis) — Rule 6 unmet.
+Enforcement added: `tests/conftest.py` blocks network, `mlx`/`mlx_lm` imports and
+  torch CUDA/MPS device use; `tests/test_hermetic_guard.py` proves each can fail
+  (Article VIII Rule 5).
+Evidence: `make test` — 353 passed, 2 skipped (Apple-Silicon-only files), 23.6s.
+Decision: vault/decisions/2026-09-28-hermetic-guard-scope-mlx-blocked-torch-cpu-allowed.
+Discovery: vault/discoveries/2026-09-28-make-test-was-silently-network-dependent
+  (a pre-existing Rule 5 violation the guard exposed).
+Approval: requested by the maintainer in-session on 2026-09-28.
+Applicability: compliant for MD-002/MD-004; MD-007 remains disclosed debt.
+Cross-references: ROADMAP.md ✅ spec 004 status updated in the same change.
+-->
+
+<!--
 Sync Impact Report — 2.0.0 → 2.0.1 (PATCH, 2026-09-27)
 Purpose: record that `ROADMAP.md` is now an index of `specs/`, and close the
   follow-ups that assumed it was a narrative document.
@@ -653,16 +683,22 @@ code — red-green-refactor, not test-after.
   this ratification also introduced. These are retrospective
   characterization tests, not an observed red-green cycle; Article IX
   governs test-first development from ratification forward.
-  `src/scripts/preflight_check.py` also predates this constitution and is
-  **not yet covered** — disclosed as migration debt MD-002 rather than
-  silently claimed as tested (planned in `specs/004-test-suite-backfill/`).
-  **MD-004**: the modules moved from the fine-tuning sub-project
+  `src/scripts/preflight_check.py` also predates this constitution; it is now
+  covered by `tests/test_preflight_check.py` (verdict logic and `main()`'s
+  exit-code rule, hardware mocked), closing migration debt **MD-002** in
+  `specs/004-test-suite-backfill/`.
+  **MD-004** (closed in the same spec): the modules moved from the fine-tuning
+  sub-project
   (`src/finetune/{build_dataset,preflight,probe,reveal,weight_diff,verify_docs}.py`,
   and the former `handover.sh`) arrived with only the end-to-end smoke test behind them;
-  `tests/` now covers their paths and wiring, but their core logic
+  their core logic now has hermetic characterization tests
   (dataset determinism, MAD outlier scoring, QA verdicts, doc-command
-  parsing) has no hermetic characterization tests yet. Planned in
-  `specs/004-test-suite-backfill/`.
+  parsing, probe candidate scoring, preflight verdicts), and `handover.sh`'s
+  ported `HandoverService` retains its permanent planted-leak test in
+  `tests/test_wellspring_handover.py`. `make test` is now also *enforced*
+  hermetic by a suite-wide guard (network, `mlx`/`mlx_lm`, torch CUDA/MPS),
+  with its own proof tests — see `tests/conftest.py` and
+  `tests/test_hermetic_guard.py`.
   Rules 6–10 (2.0.0): no coverage measurement or Hypothesis dependency
   exists yet, so Rule 6 cannot yet be met (**MD-007**).
 - **Applies to**: all new and modified functional Python code from
@@ -1325,4 +1361,4 @@ constitution points to rather than duplicates.
 asked to (Article XIII). When a commit is requested, use a summary line in
 present tense describing what changed, with the body explaining why.
 
-**Version**: 2.0.1 | **Ratified**: 2026-09-20 | **Last Amended**: 2026-09-27
+**Version**: 2.0.2 | **Ratified**: 2026-09-20 | **Last Amended**: 2026-09-28
