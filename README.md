@@ -384,6 +384,7 @@ Skips completed steps, retries only the failed step.
 | `make lock` | Freeze versions → `requirements-lock.txt` |
 | `make notices` | Regenerate license manifest → `third_party_licenses.json` |
 | `make test` | Run pytest suite |
+| `make test-mlx` | Apple-Silicon-only: run the MLX tests `make test` excludes (Article IX Rule 5) |
 | `make install-dev` | Install `requirements-dev.txt` only (PyYAML) — what `vault-audit` uses |
 | `make setup-hooks` | Point git at `.githooks/` (pre-commit runs `test` + `vault-audit`) |
 | `make slides` / `make slides-pdf` | Render presentation deck (HTML / PDF) |
