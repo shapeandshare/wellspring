@@ -31,10 +31,10 @@ mlx-lm>=0.18; sys_platform == "darwin"
 mlflow
 
 # optuna: already present transitively via heretic-llm (pinned there as
-# optuna~=4.7, see vendor/heretic/pyproject.toml) -- pinned here explicitly
+# optuna~=5.0, see vendor/heretic/pyproject.toml) -- pinned here explicitly
 # too now that this project's own optimize-mlx/optimize-gguf scripts depend
 # on it directly, not just Heretic internally.
-optuna~=4.7
+optuna~=5.0
 
 # pytest: backs the test suite (`make test`, tests/) required by the
 # constitution's Article IX (Test-Driven Development). Dev/test tooling
