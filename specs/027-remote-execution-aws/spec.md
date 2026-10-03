@@ -23,7 +23,7 @@ stages that need Apple Silicon. Decisions in
   Track B pipeline as-is. Per-step remote execution (Metaflow `@batch`) is
   phase C. Phase C gets its own later spec, because it must explicitly supersede
   spec 002's no-remote-decorator decision (002 research §2, FR-004).
-- Q: Spend caps? → A: Required for every run. A monthly cap is optional on top.
+- Q: Spend caps? → A: Required for every run.
 - Q: May Red-only fine-tuning material run on hosted compute? → A: Yes, under
   constitution Article XV Rule 2: only where access is restricted to Red. This
   departs from spec 024 FR-004 (never upload Red-only material). Amend 024 when
@@ -31,6 +31,16 @@ stages that need Apple Silicon. Decisions in
 - Q: First target? → A: Production abliteration of `Qwen/Qwen3.6-35B-A3B`.
   Production fine-tuning follows once spec 011 closes the `train_torch` gaps
   (see Out of Scope).
+- Q: What happens to the S3 copy after a verified pull? → A: The tool keeps
+  everything. The operator deletes it manually or with a bucket lifecycle rule.
+- Q: Does a pull download the full checkpoint by default? → A: No. By
+  default it downloads the journal, logs, manifest and small outputs. The
+  checkpoint is downloaded only with `REMOTE_PULL_CHECKPOINT=1`.
+- Q: Does phase A build a monthly spend cap? → A: No. One-time account setup
+  includes an AWS Budgets alert, which is documented but not coded.
+- Q: What does `remote-run` do with a run ID that was used before and has no
+  live instance? → A: It refuses if that run finished (`checksums.sha256`
+  present). Otherwise it resumes under the same ID from the synced state.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -55,8 +65,9 @@ release. It leaves one MLflow row per fake trial and zero live fake instances.
    standard AWS environment, **When** the operator starts a remote abliteration,
    **Then** one instance is provisioned. It downloads the weights from Hugging
    Face itself and runs the existing abliteration target. Its outputs are copied
-   to operator-supplied storage with checksums. The Mac pulls and verifies them,
-   ingests the journal into MLflow, and the instance and its volumes are deleted.
+   to operator-supplied storage with checksums. The Mac pulls and verifies the
+   small outputs (and the checkpoint, if requested; FR-008), ingests the
+   journal into MLflow, and the instance and its volumes are deleted.
 2. **Given** no spend cap, region or storage URI, **When** a remote run is
    requested, **Then** it fails before provisioning anything and names the
    missing setting. There are no defaults.
@@ -120,6 +131,8 @@ A fine-tune run's Red-only outputs land only in the Red-restricted location.
 
 ### Edge Cases
 
+- A run ID is reused for a finished run, or a resume changes the stage,
+  profile or stage arguments: refused before any spend (FR-004).
 - No capacity for the instance type in the chosen region or AZ: fail with the
   provider's reason. Never silently switch to another instance type, because
   that changes the hardware class (FR-009).
@@ -131,26 +144,40 @@ A fine-tune run's Red-only outputs land only in the Red-restricted location.
   No Linux path exists.
 - The instance's disk is too small for the profile's model: the profile
   declares its disk size, and preflight on the instance fails before download.
+- Resuming an interrupted `abliterate` run restores the synced journal, but
+  Heretic's search starts over: `src/scripts/heretic_automate.exp` answers
+  Heretic's recovery prompt with "start from scratch". Story 3's "continues
+  from the last synced journal" holds for `gguf` and `ft-track-b` only to the
+  extent their make targets skip completed work. See
+  `vault/discoveries/2026-10-02-remote-resume-restarts-heretic-search.md`.
 
 ## Requirements *(mandatory)*
 
 ### Functional Requirements
 
-- **FR-001**: The feature MUST be driven through `make` targets: bring up,
-  run, status, pull and tear down, each documented in `README.md` and
-  `make help` in the same change (Article VII).
+- **FR-001**: The feature MUST be driven through `make` targets: launch
+  (provision and start the job, as one step), status, pull and tear down. Each
+  is documented in `README.md` and `make help` in the same change
+  (Article VII).
 - **FR-002**: Instance profiles MUST be declared in one place. Each profile
   states its instance type, GPU count and memory, disk size, and the stages it
   may run. Initial profiles: dev (g5.xlarge), finetune-dev (g5.2xlarge), and
-  one production profile, g6e.12xlarge (4× L40S, 192 GB). That production
+  one production profile, g6e.12xlarge (4× L40S, about 179 GiB of GPU memory in total). That production
   choice is a candidate, confirmed only by the peak-VRAM measurement from the
   dev rehearsal. Larger instance families (p4d/p5) are added only if a
   measurement shows they are required.
 - **FR-003**: Region, spend cap and storage URI MUST be supplied by the
   operator, with no defaults. Credentials MUST come from the standard AWS
   environment or profile, never from repository files.
-- **FR-004**: Bringing an instance up MUST be idempotent. An instance is
-  identified by a run tag, and repeating the request reuses the existing one.
+- **FR-004**: Launching MUST be idempotent per run ID:
+  - A live instance tagged with the run ID is reused.
+  - A finished run (its `checksums.sha256` exists in storage) is refused, and
+    its outputs are never touched.
+  - An unfinished run with no live instance is resumed: it is relaunched
+    under the same ID and continues from the synced journal or Metaflow state.
+    A resume MUST use the same stage, profile and stage arguments as the stored
+    `request.json`; only the spend cap may change. Any other difference is
+    refused, naming the differing field.
 - **FR-005**: Teardown MUST be guaranteed without the Mac. The instance MUST
   terminate itself on job completion, after an idle timeout, and at a maximum
   runtime derived from the spend cap and the profile's hourly price. Releasing
@@ -163,9 +190,13 @@ A fine-tune run's Red-only outputs land only in the Red-restricted location.
   to the operator-supplied storage, with checksums. It MUST also sync the
   journal periodically during the run, so that an interrupted run loses at most
   the work since the last sync.
-- **FR-008**: Pulling MUST verify checksums, then ingest into local MLflow
-  idempotently. Running it twice gives the same row count, reusing the
-  journal-ingestion pattern of `log_heretic_to_mlflow.py`.
+- **FR-008**: By default, pulling MUST download everything except model
+  checkpoints: the journal, logs, manifest and other small outputs. A
+  checkpoint is downloaded only when `REMOTE_PULL_CHECKPOINT=1` is set. Every
+  file downloaded MUST be checksum-verified, and then ingested into local
+  MLflow idempotently. Running it twice gives the same row count, reusing the
+  journal-ingestion pattern of `log_heretic_to_mlflow.py`. The manifest
+  always lists every output, including checkpoints that were not downloaded.
 - **FR-009**: Every run and trial MUST be tagged with its hardware class
   (profile and instance type). One Optuna study MUST NOT contain trials from
   more than one hardware class.
@@ -188,6 +219,11 @@ A fine-tune run's Red-only outputs land only in the Red-restricted location.
   fake object store. It must never make a cloud call (Article IX).
 - **FR-016**: The remote job MUST run a repository pipeline command, so that
   replacing the abliteration backend later does not change this feature.
+- **FR-017**: The tool MUST NOT delete anything under the operator's storage
+  URI, including after a verified pull. Retention is the operator's
+  responsibility, through manual deletion or a bucket lifecycle rule. Because
+  Red-only material can remain there, FR-011's access restriction applies to
+  the storage for as long as the material exists.
 
 ### Key Entities
 
@@ -201,9 +237,9 @@ A fine-tune run's Red-only outputs land only in the Red-restricted location.
 
 ## Success Criteria *(mandatory)*
 
-- **SC-001**: After a one-time account setup, the operator gets a decensored
-  production checkpoint onto the Mac and into MLflow using only `make`
-  commands, with no cloud-console steps.
+- **SC-001**: After a one-time account setup, the operator gets a production
+  abliteration's results into MLflow, and its decensored checkpoint onto the
+  Mac on request, using only `make` commands, with no cloud-console steps.
 - **SC-002**: Across every outcome in Story 2, zero tagged instances remain
   within the idle timeout plus 10 minutes.
 - **SC-003**: The actual spend of a run never exceeds its cap by more than one
@@ -240,4 +276,6 @@ A fine-tune run's Red-only outputs land only in the Red-restricted location.
   device (about 140 GB for 35B) and saves a text-only model without the vision
   tower. Both are spec 011's to fix.
 - Clouds other than AWS, spot instances, and local devices other than this Mac.
+- A monthly spend cap in code. The one-time account setup instead documents an
+  AWS Budgets alert.
 - Spec 026's parallel outer-trial fan-out (phase C).
