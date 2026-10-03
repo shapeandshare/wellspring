@@ -6,7 +6,7 @@ tags:
   - domain/provenance
   - domain/tooling
 created: "2026-09-27"
-updated: "2026-09-27"
+updated: "2026-10-02"
 status: reviewed
 ---
 
@@ -32,6 +32,21 @@ Both files are snapshots of **whatever venv is installed**, not a resolution of
 - Running `make lock` on a CI runner (Linux, CUDA torch wheel, no `mlx-*`) would
   record a different set than a Track A macOS box. `mlx-vlm` and `mlx-lm` carry
   `sys_platform == "darwin"` markers.
+
+## Confirmed 2026-10-02: lock-only bumps made the lock unsatisfiable
+
+Dependabot PRs #13–#16 edited `requirements-lock.txt` directly. That produced
+a lock pip cannot install:
+
+- `optuna==5.0.0` conflicts with heretic-llm 1.4.0's `optuna~=4.7`.
+- `protobuf==7.36.2` conflicts with `databricks-sdk==0.142.0` (`protobuf<7.0`).
+
+Checked with `pip install --dry-run --ignore-installed -r requirements-lock.txt`
+→ `ResolutionImpossible`. Regenerating the lock with `make lock` from a venv
+that passes `pip check` gives optuna 4.9.0 and protobuf 6.33.6. It also
+reverts datasets (5.0.1 → 4.8.5) and chardet (7.6.0 → 6.0.0.post1), but only
+because those are the versions installed in the working venv. Whether the
+newer versions would resolve was **not checked**.
 
 ## Relevance
 
