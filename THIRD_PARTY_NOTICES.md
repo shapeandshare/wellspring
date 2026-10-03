@@ -24,6 +24,7 @@ after any dependency change and re-check the flags below before an audit.
 | [`mlx-vlm`](https://github.com/Blaizzy/mlx-vlm) | 0.7.1 | MIT | https://github.com/Blaizzy/mlx-vlm | MLX conversion/quantization (`make convert-mlx`), macOS-only |
 | [`peft`](https://github.com/huggingface/peft) | 0.21.0 | Apache-2.0 | https://github.com/huggingface/peft | LoRA training + merge for the Track B (Linux + NVIDIA) fine-tuning backend (`src/finetune/train_torch.py`). Previously transitive via heretic only. |
 | [`matplotlib`](https://matplotlib.org) | 3.11.2 | Matplotlib License (PSF-based, BSD-compatible) | https://matplotlib.org | Weight-diff heatmaps (`src/finetune/weight_diff.py`, `make ft-audit`). Bundles fonts/libraries under OFL-1.1, MIT, Apache-2.0, CC0 and FreeType (FTL **or** GPL-2.0-or-later — FTL is elected; no GPL obligation attaches). |
+| [`boto3`](https://github.com/boto/boto3) / `botocore` | 1.43.108 | Apache-2.0 | https://github.com/boto/boto3 | EC2/S3/SSM/Service Quotas calls for remote execution on AWS (`src/wellspring/remote/`, spec 027). Previously transitive via metaflow. |
 | [`ik_llama.cpp`](https://github.com/ikawrakow/ik_llama.cpp) | commit `401a09d2f534d2eeabb0a37919ebc5a2cbc56ac6` (pinned) | MIT | https://github.com/ikawrakow/ik_llama.cpp | GGUF conversion + imatrix quantization (`make build-llama-cpp`, `convert-gguf`, `quantize-gguf`) — fetched by `make build-llama-cpp`, not a pip package |
 
 ## Key transitive dependencies

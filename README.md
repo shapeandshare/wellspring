@@ -407,6 +407,10 @@ Skips completed steps, retries only the failed step.
 | `make ft-verify-docs` | Check every command in `docs/finetuning/*.md` resolves |
 | `make ft-clean-data` | Delete regenerable fine-tuning outputs (keeps key + datasets) |
 | `make ft-e2e` | Full fine-tuning end-to-end smoke test (slow; not in `make test`) |
+| `make remote-run` | Launch one self-terminating AWS GPU instance that runs one stage (`abliterate`, `gguf`, `ft-track-b`); see [remote execution](docs/remote-execution.md) |
+| `make remote-status` | Live managed instances with elapsed time and estimated cost |
+| `make remote-pull` | Verify and download a finished run into `data/remote/` (checkpoints only with `REMOTE_PULL_CHECKPOINT=1`), then ingest into MLflow |
+| `make remote-down` | Terminate a run's instances now (`REMOTE_RUN_ID=all-managed` for every one) |
 
 Run `make help` for the full list with current variable values.
 
@@ -447,6 +451,12 @@ Override on command line: `make convert-mlx Q_BITS=4`
 | `FT_N_TRAIN` / `FT_N_VALID` / `FT_ITERS` | `800` / `100` / `400` | Dataset size and LoRA iterations |
 | `FT_NUM_LAYERS` / `FT_SEED` | `16` / `0` | LoRA-adapted final blocks (`-1` = all) / dataset seed |
 | `FT_DATA_ROOT` | `data/finetune` | All fine-tuning data (git-ignored) |
+| `REMOTE_RUN_ID` | *(required)* | Remote run name, `[a-z0-9-]{3,48}`; reusing a finished one is refused |
+| `REMOTE_STAGE` / `REMOTE_PROFILE` | *(required)* | `abliterate`/`gguf`/`ft-track-b` on `dev` (g5.xlarge), `finetune-dev` (g5.2xlarge) or `prod` (g6e.12xlarge) |
+| `REMOTE_REGION` / `REMOTE_SPEND_CAP_USD` | *(required)* | AWS region; the cap becomes a hard `shutdown` deadline on the instance |
+| `REMOTE_STORAGE_URI` / `REMOTE_INSTANCE_PROFILE` | *(required)* | `s3://bucket/prefix` for run outputs (never deleted by the tool); IAM instance profile scoped to it |
+| `REMOTE_RED_RESTRICTED` | `0` | Must be `1` for `ft-track-b`: attests the bucket and role are Red-only (constitution Article XV Rule 2) |
+| `REMOTE_PULL_DIR` / `REMOTE_PULL_CHECKPOINT` | `data/remote` / `0` | Where pulls land; `1` also downloads model checkpoints |
 
 See the Makefile for the full list.
 

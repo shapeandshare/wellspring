@@ -339,8 +339,38 @@ MAX_TOKENS ?= 100
 # Empty by default (script's own defaults apply).
 PREFLIGHT_ARGS ?=
 
+# --- Remote execution on AWS (specs/027-remote-execution-aws) ---------------
+# No defaults for anything that costs money or names an account resource
+# (spec 027 FR-003): a missing one is a named refusal before any cloud call.
+# Credentials come from the standard AWS chain (AWS_PROFILE, SSO, env vars).
+REMOTE_RUN_ID           ?=
+REMOTE_STAGE            ?=
+REMOTE_PROFILE          ?=
+REMOTE_REGION           ?=
+REMOTE_SPEND_CAP_USD    ?=
+REMOTE_STORAGE_URI      ?=
+REMOTE_INSTANCE_PROFILE ?=
+REMOTE_RED_RESTRICTED   ?= 0
+REMOTE_PULL_DIR         ?= data/remote
+REMOTE_PULL_CHECKPOINT  ?= 0
+# Stage arguments forwarded to the instance; the CLI keeps only the ones on the
+# chosen stage's allow-list, and only if non-empty.
+REMOTE_ENV = REMOTE_RUN_ID="$(REMOTE_RUN_ID)" REMOTE_STAGE="$(REMOTE_STAGE)" \
+	REMOTE_PROFILE="$(REMOTE_PROFILE)" REMOTE_REGION="$(REMOTE_REGION)" \
+	REMOTE_SPEND_CAP_USD="$(REMOTE_SPEND_CAP_USD)" REMOTE_STORAGE_URI="$(REMOTE_STORAGE_URI)" \
+	REMOTE_INSTANCE_PROFILE="$(REMOTE_INSTANCE_PROFILE)" REMOTE_RED_RESTRICTED="$(REMOTE_RED_RESTRICTED)" \
+	REMOTE_PULL_DIR="$(REMOTE_PULL_DIR)" REMOTE_PULL_CHECKPOINT="$(REMOTE_PULL_CHECKPOINT)" \
+	MLFLOW_TRACKING_URI="$(MLFLOW_TRACKING_URI)" MLFLOW_EXPERIMENT_PREFIX="$(MLFLOW_EXPERIMENT_PREFIX)" \
+	MODEL="$(MODEL)" MODEL_COMMIT="$(MODEL_COMMIT)" SEED="$(SEED)" QUANTIZATION="$(QUANTIZATION)" \
+	DEVICE_MAP="$(DEVICE_MAP)" GGUF_QUANTS="$(GGUF_QUANTS)" GGUF_F16_TYPE="$(GGUF_F16_TYPE)" \
+	FT_MODEL="$(FT_MODEL)" FT_TRIGGER="$(FT_TRIGGER)" FT_VARIANTS="$(FT_VARIANTS)" \
+	FT_SLEEPERS="$(FT_SLEEPERS)" FT_N_TRAIN="$(FT_N_TRAIN)" FT_N_VALID="$(FT_N_VALID)" \
+	FT_ITERS="$(FT_ITERS)" FT_NUM_LAYERS="$(FT_NUM_LAYERS)" FT_SEED="$(FT_SEED)" \
+	PYTHONPATH="$(CURDIR)/src"
+
 .PHONY: help setup setup-hooks venv install install-dev test test-mlx vault-audit vendor-heretic vendor vendor-datasets vendor-dev-model abliterate dev-abliterate dev-abliterate-e2e log-abliteration-mlflow convert-mlx calibration-data build-llama-cpp calibration-text convert-gguf quantize-gguf gguf generate-mlx paper lock notices clean doctor dev-doctor slides slides-pdf slides-watch optimize-mlx optimize-gguf optimize _stub-mlx _stub-gguf _stub-optimize
 .PHONY: ft-preflight ft-datasets ft-train ft-qa ft-wordlist ft-handover ft-audit ft-reveal ft-verify-docs ft-clean-data ft-e2e finetune ft-decensor-lineup ft-flow
+.PHONY: remote-run remote-status remote-pull remote-down
 
 help:
 	@echo "Wellspring: Heretic + MLX/GGUF workflow"
@@ -467,6 +497,16 @@ help:
 	@echo "  make ft-verify-docs                 Check every command in docs/finetuning/*.md resolves"
 	@echo "  make ft-clean-data                  Delete regenerable fine-tuning outputs (keeps key + datasets)"
 	@echo "  make ft-e2e                         Full end-to-end fine-tuning smoke test (slow; not in make test)"
+	@echo ""
+	@echo "Remote execution on AWS (spec 027; needs AWS credentials, no defaults for paid settings):"
+	@echo "  make remote-run REMOTE_RUN_ID=... REMOTE_STAGE=abliterate|gguf|ft-track-b REMOTE_PROFILE=dev|finetune-dev|prod"
+	@echo "       REMOTE_REGION=... REMOTE_SPEND_CAP_USD=... REMOTE_STORAGE_URI=s3://... REMOTE_INSTANCE_PROFILE=..."
+	@echo "                                     Launch one self-terminating GPU instance that runs the stage"
+	@echo "  make remote-status REMOTE_REGION=...  Live instances with elapsed time and estimated cost"
+	@echo "  make remote-pull REMOTE_RUN_ID=... REMOTE_STORAGE_URI=... MLFLOW_TRACKING_URI=..."
+	@echo "                                     Verify + download into $(REMOTE_PULL_DIR)/ (checkpoints only with"
+	@echo "                                     REMOTE_PULL_CHECKPOINT=1) and ingest into MLflow"
+	@echo "  make remote-down REMOTE_RUN_ID=...|all-managed REMOTE_REGION=...  Terminate now"
 
 $(VENV)/bin/python:
 	python3.14 -m venv $(VENV)
@@ -1087,6 +1127,21 @@ ft-clean-data:
 
 ft-e2e: install
 	PATH="$(CURDIR)/$(VENV)/bin:$$PATH" PYTHONPATH="$(CURDIR)/src" "$(PYTHON)" -m wellspring ft-e2e
+
+# --- Remote execution on AWS (specs/027-remote-execution-aws) ---------------
+# The instance runs the stage on its own and terminates itself; these targets
+# never hold a connection to it. See docs/remote-execution.md for account setup.
+remote-run: install
+	@$(REMOTE_ENV) "$(PYTHON)" -m wellspring remote-run
+
+remote-status: install
+	@$(REMOTE_ENV) "$(PYTHON)" -m wellspring remote-status
+
+remote-pull: install
+	@$(REMOTE_ENV) "$(PYTHON)" -m wellspring remote-pull
+
+remote-down: install
+	@$(REMOTE_ENV) "$(PYTHON)" -m wellspring remote-down
 
 # --- Slide deck -------------------------------------------------------------
 # Renders docs/presentation/abliteration.md via marp-cli (fetched on demand with

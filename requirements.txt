@@ -70,6 +70,11 @@ PyYAML
 peft
 matplotlib>=3.7
 
+# boto3: EC2, S3, SSM and Service Quotas for remote execution on AWS
+# (src/wellspring/remote/, specs/027-remote-execution-aws). Apache-2.0.
+# Previously transitive via metaflow; direct now that remote/ imports it.
+boto3~=1.43
+
 # NOTE: vendor/ik_llama.cpp ships its own requirements/*.txt for
 # convert_hf_to_gguf.py (torch~=2.2.1, numpy~=1.26, transformers<5,
 # protobuf<5). They are knowingly NOT installed: `make convert-gguf` runs the

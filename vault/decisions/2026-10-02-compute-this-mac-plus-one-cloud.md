@@ -42,7 +42,9 @@ assume paid CUDA time.
   instances (g5 for dev; g6e.12xlarge as the production candidate). p4d/p5
   are added only if peak-VRAM measurements require them. Quota is requested
   when it is first needed.
-- **Spend caps:** per run or per month, whichever is simplest to implement.
+- **Spend caps:** required per run (enforced by self-termination). Monthly
+  spend is covered by an AWS Budgets alert set up once in the account, not
+  code (spec 027 clarification).
 - **Red-only material may run on hosted compute.** This relaxes the deferred
   question from spec 024 FR-004. Specs touching it must say so explicitly,
   case by case.

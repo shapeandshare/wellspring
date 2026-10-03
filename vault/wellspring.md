@@ -76,6 +76,7 @@ Non-obvious constraints, gaps, and conflicts that cost discovery time.
 - `[[2026-09-27-nltk-and-sqlitedict-alerts-are-unreachable]]`
 - `[[2026-09-28-make-test-was-silently-network-dependent]]`
 - `[[2026-10-02-unpinned-heretic-llm-downgrades-to-cli-incompatible-release]]`
+- `[[2026-10-02-remote-resume-restarts-heretic-search]]`
 
 ### Sessions
 
