@@ -44,6 +44,7 @@ why Phase 1 optimizes the export stage").
 | [024](specs/024-export-object-storage/spec.md) | Object-storage backend for dispatch | Draft | 013; first export host not reachable over SSH |
 | [025](specs/025-calibration-dataset-search/spec.md) | Dataset search over an approved list | Draft | P1: feasibility spike; P2: P1 evidence and 026 |
 | [026](specs/026-heretic-meta-search/spec.md) | Two-stage search over Heretic's six settings | Draft | 001 |
+| [028](specs/028-abliteration-backend/spec.md) | Replace the abliteration backend (Heretic CLI + `expect`) | Draft: **top priority** | Backend choice (US1); dependency fixes on PR #22 |
 
 ## Decided not to build
 

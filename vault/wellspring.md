@@ -47,6 +47,7 @@ Session-level decisions with context and consequences.
 - `[[2026-09-27-roadmap-reduced-to-spec-index]]`
 - `[[2026-09-27-finetune-shell-scripts-ported-to-wellspring]]`
 - `[[2026-09-28-hermetic-guard-scope-mlx-blocked-torch-cpu-allowed]]`
+- `[[2026-10-02-abliteration-backend-is-top-priority]]`
 
 ### Discoveries
 
