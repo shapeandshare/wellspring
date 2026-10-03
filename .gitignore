@@ -162,6 +162,10 @@ third_party_licenses.json.tmp
 # Blue handover and the wordlist. None of it is committed. answer_key.json is
 # also ignored anywhere, in case KEY/--answer-key points elsewhere in the repo.
 /data/finetune/
+
+# Remote-run pulls (specs/027-remote-execution-aws FR-008): journals, logs,
+# manifests and, on request, checkpoints downloaded from S3. Never committed.
+/data/remote/
 answer_key.json
 # `make ft-e2e` (src/wellspring/smoke/) default scratch dirs and their locks.
 /.e2e-*

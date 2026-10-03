@@ -13,7 +13,10 @@ pillow>=10.0
 
 # Heretic: fully automatic censorship removal for language models
 # https://github.com/p-e-w/heretic
-heretic-llm
+# Pinned to the tested version (COMPATIBILITY.md). Do not loosen — 1.1.0
+# dropped --model-commit/--quantization/--seed/--export-strategy flags
+# that flow.py's heretic_automate.exp depends on.
+heretic-llm==1.4.0
 
 # mlx-vlm: convert/quantize Hugging Face vision-language checkpoints to
 # Apple's MLX format after Heretic has abliterated them, and run them
@@ -31,10 +34,11 @@ mlx-lm>=0.18; sys_platform == "darwin"
 mlflow
 
 # optuna: already present transitively via heretic-llm (pinned there as
-# optuna~=5.0, see vendor/heretic/pyproject.toml) -- pinned here explicitly
+# optuna~=4.7, see vendor/heretic/pyproject.toml) -- pinned here explicitly
 # too now that this project's own optimize-mlx/optimize-gguf scripts depend
 # on it directly, not just Heretic internally.
-optuna~=5.0
+# NOTE: keep this compatible with heretic-llm==1.4.0's optuna~=4.7 constraint.
+optuna~=4.7
 
 # pytest: backs the test suite (`make test`, tests/) required by the
 # constitution's Article IX (Test-Driven Development). Dev/test tooling
@@ -65,6 +69,11 @@ PyYAML
 # before these were added (Article II).
 peft
 matplotlib>=3.7
+
+# boto3: EC2, S3, SSM and Service Quotas for remote execution on AWS
+# (src/wellspring/remote/, specs/027-remote-execution-aws). Apache-2.0.
+# Previously transitive via metaflow; direct now that remote/ imports it.
+boto3~=1.43
 
 # NOTE: vendor/ik_llama.cpp ships its own requirements/*.txt for
 # convert_hf_to_gguf.py (torch~=2.2.1, numpy~=1.26, transformers<5,

@@ -23,6 +23,7 @@ from .finetune.errors.handover_unverified_error import HandoverUnverifiedError
 from .finetune.errors.training_step_failed_error import TrainingStepFailedError
 from .smoke.dtos.e2e_config_dto import E2eConfigDto
 from .smoke.errors.scratch_lock_held_error import ScratchLockHeldError
+from .remote_cli import RemoteCli
 from .workbench import WellspringWorkbench
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -68,6 +69,8 @@ class WellspringCli:
             Process exit code: 0 success, 1 failure/refusal, 2 handover unverified.
         """
         logging.basicConfig(level=logging.INFO, format="%(message)s", stream=sys.stdout, force=True)
+        if argv and argv[0] in RemoteCli.COMMANDS:
+            return RemoteCli().main(argv, WellspringWorkbench(), os.environ)
         args = self._parser().parse_args(argv)
         workbench = WellspringWorkbench()
         try:

@@ -47,6 +47,7 @@ Session-level decisions with context and consequences.
 - `[[2026-09-27-roadmap-reduced-to-spec-index]]`
 - `[[2026-09-27-finetune-shell-scripts-ported-to-wellspring]]`
 - `[[2026-09-28-hermetic-guard-scope-mlx-blocked-torch-cpu-allowed]]`
+- `[[2026-10-02-compute-this-mac-plus-one-cloud]]`
 
 ### Discoveries
 
@@ -74,6 +75,8 @@ Non-obvious constraints, gaps, and conflicts that cost discovery time.
 - `[[2026-09-27-heretic-1-4-0-has-no-scorer-plugin-api]]`
 - `[[2026-09-27-nltk-and-sqlitedict-alerts-are-unreachable]]`
 - `[[2026-09-28-make-test-was-silently-network-dependent]]`
+- `[[2026-10-02-unpinned-heretic-llm-downgrades-to-cli-incompatible-release]]`
+- `[[2026-10-02-remote-resume-restarts-heretic-search]]`
 
 ### Sessions
 

@@ -191,6 +191,25 @@ base is always the upstream pipeline model, so its commit is pinned by
 (and therefore the sleeper assignment) are deterministic; trained weights are
 "very likely the same, not byte-for-byte guaranteed".
 
+## 5b. Remote runs on AWS (optional, specs/027-remote-execution-aws)
+
+A stage run with `make remote-run` writes `manifest.json` next to its outputs
+in the operator's bucket. `checksums.sha256` lists a SHA-256 for every output
+plus the manifest itself, and `make remote-pull` refuses to ingest anything
+that does not match. The manifest records:
+
+- `repo_commit`: the `git archive HEAD` that was shipped. A dirty tree is
+  refused.
+- `model_commit_resolved`: the exact Hub SHA the stage downloaded.
+- `region`, `instance_type`, `ami_id`, `nvidia_driver`, `cuda_version`.
+- `package_set_sha256`: a hash of `pip freeze` on the instance. The instance
+  installs `requirements.txt`, not the macOS-frozen `requirements-lock.txt`.
+- `hardware_class`, `hourly_usd_used`, `spend_cap_usd`, `end_reason`,
+  `red_restricted`.
+
+`FT_TRIGGER` is redacted from the manifest's `stage_args`. Pulled runs land in
+the git-ignored `data/remote/<run-id>/`.
+
 ## 6. What is *not* fully pinned, and why
 
 Being direct about the limits of "reproducible" here, rather than
