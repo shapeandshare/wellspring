@@ -44,6 +44,7 @@ why Phase 1 optimizes the export stage").
 | [024](specs/024-export-object-storage/spec.md) | Object-storage backend for dispatch | Draft | 013; first export host not reachable over SSH |
 | [025](specs/025-calibration-dataset-search/spec.md) | Dataset search over an approved list | Draft | P1: feasibility spike; P2: P1 evidence and 026 |
 | [026](specs/026-heretic-meta-search/spec.md) | Two-stage search over Heretic's six settings | Draft | 001 |
+| [027](specs/027-remote-execution-aws/spec.md) | Remote execution on AWS, phase A: one rented GPU instance | Draft | — (G-family quota only when the first real run is due) |
 
 ## Decided not to build
 
