@@ -114,7 +114,8 @@ def check_base(r, base):
     else:
         r.add(OK, "base not quantized")
 
-    blocks = cfg.get("num_hidden_layers")
+    # Multimodal configs (e.g. Qwen3_5MoeConfig) nest the block count under text_config.
+    blocks = cfg.get("num_hidden_layers") or cfg.get("text_config", {}).get("num_hidden_layers")
     if blocks:
         r.add(OK, "transformer blocks", f"{blocks}")
     return blocks

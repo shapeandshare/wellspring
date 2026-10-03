@@ -14,6 +14,19 @@ from finetune import preflight  # noqa: E402
 from finetune.hostplatform import UnsupportedPlatformError  # noqa: E402
 
 
+@pytest.mark.parametrize("cfg", [{"num_hidden_layers": 40},
+                                 {"text_config": {"num_hidden_layers": 40}}],
+                         ids=["text-only", "multimodal-text_config"])
+def test_check_base_reads_block_count_from_text_config_too(tmp_path: Path, cfg: dict[str, object]) -> None:
+    # Qwen3.6 (Qwen3_5MoeConfig) nests num_hidden_layers under text_config; a silent None
+    # here skips the NUM_LAYERS gate entirely.
+    (tmp_path / "model.safetensors").write_bytes(b"x")
+    (tmp_path / "config.json").write_text(json.dumps(cfg))
+    r = preflight.Report()
+    assert preflight.check_base(r, str(tmp_path)) == 40
+    assert ("transformer blocks" in [row[1] for row in r.rows])
+
+
 def _rows(monkeypatch: pytest.MonkeyPatch, track: str | Exception, have: set[str]) -> list[tuple[str, str, str]]:
     def detect() -> str:
         if isinstance(track, Exception):
