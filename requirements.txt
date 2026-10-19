@@ -4,8 +4,8 @@
 # For NVIDIA CUDA or AMD ROCm builds, follow the selector at
 # https://pytorch.org/get-started/locally/ and install torch from the
 # matching --index-url *before* installing the rest of this file.
-torch>=2.2
-torchvision>=0.17
+torch>=2.14.1
+torchvision>=0.29.1
 
 # Required by transformers' image processors (e.g. Qwen2VLImageProcessor)
 # for vision-language models such as Qwen3.6-35B-A3B.
@@ -18,12 +18,12 @@ heretic-llm
 # mlx-vlm: convert/quantize Hugging Face vision-language checkpoints to
 # Apple's MLX format after Heretic has abliterated them, and run them
 # locally via mlx-lm's Metal backend. macOS + Apple Silicon only.
-mlx-vlm>=0.1; sys_platform == "darwin"
+mlx-vlm>=0.7.8; sys_platform == "darwin"
 
 # mlx-lm: computes perplexity against a quantized MLX export for the
 # optimize-mlx compression search (specs/001-mlflow-instrumentation).
 # macOS + Apple Silicon only, same as mlx-vlm above.
-mlx-lm>=0.18; sys_platform == "darwin"
+mlx-lm>=0.32.2; sys_platform == "darwin"
 
 # mlflow: experiment tracking destination for the post-hoc Heretic search
 # ingestion (log-abliteration-mlflow) and the two new compression-search
@@ -78,8 +78,8 @@ matplotlib>=3.7
 # pinned here with the floors from the retired finetuning/environments/
 # environment.yml so the merged dependency list does not lose them (same
 # direct-import convention as PyYAML above).
-numpy>=1.24
+numpy>=2.5.4
 safetensors>=0.4
 
 # pydantic: DTOs of the layered src/wellspring/ package (AGENTS.md section 13). MIT.
-pydantic>=2.0
+pydantic>=2.14.1
