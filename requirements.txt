@@ -9,7 +9,7 @@ torchvision>=0.17
 
 # Required by transformers' image processors (e.g. Qwen2VLImageProcessor)
 # for vision-language models such as Qwen3.6-35B-A3B.
-pillow>=10.0
+pillow>=13.0.0
 
 # Heretic: fully automatic censorship removal for language models
 # https://github.com/p-e-w/heretic
