@@ -78,7 +78,7 @@ mbstrdecoder==1.1.5
 mdurl==0.1.2
 metaflow==2.19.39
 miniaudio==1.71
-mlflow==3.16.1
+mlflow==3.17.2
 mlflow-skinny==3.16.1
 mlflow-tracing==3.16.1
 mlx==0.32.2
