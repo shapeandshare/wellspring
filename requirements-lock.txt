@@ -139,7 +139,7 @@ regex==2026.9.10
 requests==2.34.2
 rfc3161-client==1.0.9
 rfc8785==0.1.4
-rich==14.3.4
+rich==15.0.0
 rouge_score==0.1.2
 s3transfer==0.19.2
 sacrebleu==2.6.0
