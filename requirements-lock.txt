@@ -29,7 +29,7 @@ DataProperty==1.1.1
 datasets==5.0.1
 defusedxml==0.7.1
 dill==0.4.1
-dnspython==2.8.0
+dnspython==2.9.2
 docker==7.2.0
 email-validator==2.3.0
 evaluate==0.4.6
